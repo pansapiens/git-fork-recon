@@ -8,6 +8,7 @@ from git import Repo, Remote
 from git.exc import GitCommandError
 
 from ..github.api import RepoInfo, ForkInfo
+from ..config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +27,9 @@ class CommitInfo:
 
 
 class GitRepo:
-    def __init__(self, repo_info: RepoInfo):
+    def __init__(self, repo_info: RepoInfo, config: Config):
         self.repo_info = repo_info
-        self.cache_dir = Path.home() / ".cache" / "git-fork-recon"
+        self.cache_dir = config.cache_dir
         self.repo_dir = self.cache_dir / f"{repo_info.owner}-{repo_info.name}"
         self._ensure_repo()
 
@@ -50,14 +51,34 @@ class GitRepo:
         """Add a fork as a remote and fetch its contents."""
         remote_name = f"fork-{fork.repo_info.owner}"
 
-        # Remove existing remote if it exists
         try:
-            existing = self.repo.remote(remote_name)
-            existing.remove()
+            # Check if remote already exists
+            remote = self.repo.remote(remote_name)
+            logger.debug(
+                f"Remote {remote_name} already exists, checking if URL matches"
+            )
+
+            # Check if the remote URL matches
+            if remote.url == fork.repo_info.clone_url:
+                logger.debug(f"Remote {remote_name} URL matches, using existing remote")
+                try:
+                    remote.fetch()
+                    return
+                except GitCommandError as e:
+                    logger.warning(
+                        f"Failed to fetch existing remote {remote_name}: {e}"
+                    )
+
+            # If URL doesn't match or fetch failed, remove the remote
+            logger.debug(f"Removing existing remote {remote_name} with mismatched URL")
+            remote.remove()
+
         except ValueError:
+            # Remote doesn't exist, which is fine
             pass
 
         # Add new remote
+        logger.info(f"Adding new remote {remote_name} for {fork.repo_info.clone_url}")
         remote = self.repo.create_remote(remote_name, fork.repo_info.clone_url)
         try:
             remote.fetch()

@@ -65,3 +65,6 @@ Options:
 - Use `-v` for verbose output: add it after `git-fork-recon`
 - Specify custom output file: add `-o myreport.md` after the URL
 - Print to stdout instead of file: add `-o -` after the URL
+- Clear cached repository data: add `--clear-cache` after `git-fork-recon` to remove any previously cached data for this repository
+
+The tool caches cloned repositories in `~/.cache/git-fork-recon` to speed up subsequent runs. Use `--clear-cache` if you want to ensure a fresh clone of the repository and its forks.

@@ -71,6 +71,19 @@ class LLMClient:
                 2. Any significant new features or improvements
                 3. Notable code refactoring or architectural changes
                 4. Potential impact or value of the changes
+
+                Provide a list of tags that apply to the changes from:
+                - "installation" - changes to the installation and packaging process, including dependencies via Docker, pip, conda etc
+                - "feature" - adds a significant new feature
+                - "functionality" - changes or improves the behavior of an existing feature
+                - "bugfix" - fixes a bug
+                - "improvement" - improves performance or reliability
+                - "ui" - changes or improves the user interface, including command line interface
+                - "refactor" - changes the code structure without adding new features, cleans up unused code
+                - "documentation" - adds or improves documentation
+                - "test" - adds or improves tests
+                - "ci" - adds or improves CI/CD
+                - "whitespace" - only whitespace changes, no significant code changes
                 
                 Be objective and technical, but make the summary accessible to developers.""",
             },
@@ -82,6 +95,34 @@ class LLMClient:
                 
                 {"Diff:" + diff if diff else ""}""",
             },
+        ]
+
+        return self._make_request(messages)
+
+    def generate_summary(self, prompt: str) -> str:
+        """Generate a high-level summary using a custom prompt."""
+        messages = [
+            {
+                "role": "system",
+                "content": """You are an expert code analyst reviewing forks of a GitHub repository.
+                Your task is to identify and summarize the most interesting and impactful forks.
+                Focus on forks that:
+                1. Add significant new features or capabilities
+                2. Make major improvements to functionality or performance
+                3. Introduce innovative approaches or solutions
+                4. Have potential value for the main repository
+
+                Provide a concise, well-organized summary that highlights:
+                - The most notable forks and their key contributions
+                - The potential impact or value of their changes
+                - Any emerging patterns or themes across multiple forks
+
+                Be objective and technical, but make the summary accessible to developers.
+                Avoid detailed descriptions of installation-focused forks unless they introduce significant architectural changes.
+                
+                Write one or two paragraphs in Markdown, including hyperlinks, discussing your findings.""",
+            },
+            {"role": "user", "content": prompt},
         ]
 
         return self._make_request(messages)

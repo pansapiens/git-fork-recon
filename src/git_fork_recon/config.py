@@ -31,12 +31,14 @@ def load_config(env_file: Optional[Path] = None) -> Config:
 
     github_token = os.getenv("GITHUB_TOKEN")
     openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+    cache_dir = os.getenv("CACHE_DIR") or str(Path.home() / ".cache" / "git-fork-recon")
 
     print(f"Found GITHUB_TOKEN: {'yes' if github_token else 'no'}", file=sys.stderr)
     print(
         f"Found OPENROUTER_API_KEY: {'yes' if openrouter_api_key else 'no'}",
         file=sys.stderr,
     )
+    print(f"Using CACHE_DIR: {cache_dir}", file=sys.stderr)
 
     if not github_token:
         print("Error: GITHUB_TOKEN environment variable is required", file=sys.stderr)
@@ -53,7 +55,6 @@ def load_config(env_file: Optional[Path] = None) -> Config:
         {
             "github_token": github_token,
             "openrouter_api_key": openrouter_api_key,
-            "cache_dir": os.getenv("CACHE_DIR")
-            or str(Path.home() / ".cache" / "git-fork-recon"),
+            "cache_dir": cache_dir,
         }
     )

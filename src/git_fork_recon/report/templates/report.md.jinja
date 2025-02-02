@@ -25,11 +25,8 @@ Found {{ analyses|length }} active forks with significant changes.
 
 **Commits:**
 {% for commit in analysis.commits %}
-- [{{ commit.hash }}]({{ repo_url }}/commit/{{ commit.hash }}): {{ commit.message.split('\n')[0] }}
-  - Author: {{ commit.author }}
-  - Files changed: {{ commit.files_changed|length }}
-  - Changes: +{{ commit.insertions }}/-{{ commit.deletions }}
+- [{{ commit.hash[:8] }}]({{ repo_url }}/commit/{{ commit.hash }}) - <span style="color:green">+{{ commit.insertions }}</span>/<span style="color:red">-{{ commit.deletions }}</span> ({{ commit.files_changed|length }} files): {{ commit.message.split('\n')[0] }} [{{ commit.author }}]
 {% endfor %}
 
 ---
-{% endfor %} 
+{% endfor %}

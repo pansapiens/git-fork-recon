@@ -5,6 +5,7 @@ import logging
 import sys
 from pathlib import Path
 import re
+import shutil
 
 import typer
 from rich.console import Console
@@ -18,6 +19,7 @@ from .report.generator import ReportGenerator
 
 app = typer.Typer()
 console = Console()
+logger = logging.getLogger(__name__)
 
 
 def parse_github_url(url: str) -> Tuple[str, str]:
@@ -38,6 +40,13 @@ def setup_logging(verbose: bool) -> None:
     )
 
 
+def clear_repo_cache(repo_dir: Path) -> None:
+    """Clear the cached repository data."""
+    if repo_dir.exists():
+        logger.info(f"Clearing cache for {repo_dir}")
+        shutil.rmtree(repo_dir)
+
+
 @app.command()
 def analyze(
     repo_url: str = typer.Argument(..., help="URL of the GitHub repository to analyze"),
@@ -50,10 +59,12 @@ def analyze(
     verbose: bool = typer.Option(
         False, "--verbose", "-v", help="Enable verbose logging"
     ),
+    clear_cache: bool = typer.Option(
+        False, "--clear-cache", help="Clear cached repository data before analysis"
+    ),
 ) -> None:
     """Analyze a GitHub repository's fork network and generate a summary report."""
     setup_logging(verbose)
-    logger = logging.getLogger(__name__)
 
     try:
         config = load_config()
@@ -75,10 +86,16 @@ def analyze(
 
         # Get repository and fork information
         repo_info = github_client.get_repository(repo_full_name)
-        forks = github_client.get_forks(repo_info)
+
+        # Clear cache if requested
+        if clear_cache:
+            repo_cache = config.cache_dir / f"{owner}-{repo}"
+            clear_repo_cache(repo_cache)
 
         # Clone main repository
-        git_repo = GitRepo(repo_info)
+        git_repo = GitRepo(repo_info, config)
+
+        forks = github_client.get_forks(repo_info)
 
         # Analyze forks and generate report
         report = report_gen.generate(repo_info, forks, git_repo)
