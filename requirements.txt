@@ -1,0 +1,9 @@
+PyGithub
+GitPython
+openrouter
+python-dotenv
+pydantic
+rich
+typer
+jinja2
+httpx 

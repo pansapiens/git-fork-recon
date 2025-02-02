@@ -1,0 +1,35 @@
+[project]
+name = "git-fork-recon"
+version = "0.1.0"
+description = "Analyse the network of forked git repositories"
+authors = []
+readme = "README.md"
+requires-python = ">=3.9"
+
+dependencies = [
+    "PyGithub>=2.2.0",      # Github API client
+    "GitPython>=3.1.40",    # Git operations
+    "openrouter>=0.3.0",    # OpenRouter API client
+    "python-dotenv>=1.0.0", # Environment variable management
+    "pydantic>=2.0.0",      # Data validation
+    "rich>=13.0.0",         # Console output formatting
+    "typer>=0.9.0",         # CLI interface
+    "jinja2>=3.1.0",        # Template rendering for reports
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0.0", "black>=24.0.0", "mypy>=1.8.0", "ruff>=0.2.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/git_fork_recon"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.mypy]
+python_version = "3.9"
+strict = true
