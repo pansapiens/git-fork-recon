@@ -3,6 +3,8 @@ import logging
 import json
 import tiktoken
 import sys
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
@@ -26,7 +28,7 @@ retry_decorator = retry(
 
 
 class LLMClient:
-    def __init__(self, api_key: str, model: str = "deepseek/deepseek-chat", context_length: Optional[int] = None):
+    def __init__(self, api_key: str, model: str = "deepseek/deepseek-chat", context_length: Optional[int] = None, max_parallel: int = 5):
         self.api_key = api_key
         self.model_name = model
         self.headers = {
@@ -37,7 +39,10 @@ class LLMClient:
         self.model_info: Optional[Dict[str, Any]] = None
         self._context_length_override = context_length
         self.tokenizer = tiktoken.encoding_for_model("gpt-4")  # Reasonable default for most models
+        self.max_parallel = max_parallel
         self._init_model_info()
+        self._executor = ThreadPoolExecutor(max_workers=max_parallel)
+        self._async_client = httpx.AsyncClient(timeout=60.0)
 
     @retry_decorator
     def _init_model_info(self) -> None:
@@ -251,3 +256,177 @@ class LLMClient:
         ]
 
         return self._make_request(messages)
+
+    async def _async_make_direct_request(self, messages: List[dict]) -> str:
+        """Make an async direct request to the OpenRouter API without chunking."""
+        data = {
+            "model": self.model_name,
+            "messages": messages,
+            "temperature": 0.7,
+            "max_tokens": 1000,
+        }
+        try:
+            response = await self._async_client.post(
+                OPENROUTER_API_URL, headers=self.headers, json=data
+            )
+            response.raise_for_status()
+            return response.json()["choices"][0]["message"]["content"]
+        except Exception as e:
+            logger.error(f"Error making async LLM request: {e}")
+            raise
+
+    async def _async_make_request(self, messages: List[dict], depth: int = 0) -> str:
+        """Make an async request to the OpenRouter API with chunking if needed."""
+        if depth > 1:
+            raise ValueError("Maximum chunk processing depth exceeded")
+
+        context_length = self._context_length_override
+        if context_length is None and self.model_info is not None:
+            context_length = self.model_info.get("context_length", 8192)
+        else:
+            context_length = 8192
+
+        total_tokens = sum(self._get_token_count(msg["content"]) for msg in messages)
+
+        if total_tokens <= context_length - 1000:
+            return await self._async_make_direct_request(messages)
+
+        logger.warning(f"Input exceeds token limit. Chunking input ({total_tokens} tokens)")
+
+        system_msg = next((m for m in messages if m["role"] == "system"), None)
+        user_msg = next((m for m in messages if m["role"] == "user"), None)
+
+        if not user_msg:
+            raise ValueError("No user message found in messages")
+
+        chunks = self._chunk_text(user_msg["content"], context_length)
+        chunk_tasks = []
+
+        for i, chunk in enumerate(chunks):
+            chunk_messages = []
+            if system_msg:
+                chunk_messages.append(system_msg)
+            chunk_messages.append({
+                "role": "user",
+                "content": f"This is part {i+1} of {len(chunks)} of the input. Please analyze this part:\n\n{chunk}"
+            })
+            chunk_tasks.append(self._async_make_direct_request(chunk_messages))
+
+        chunk_summaries = []
+        async with asyncio.TaskGroup() as tg:
+            for task in chunk_tasks:
+                tg.create_task(task)
+        chunk_summaries = [task.result() for task in chunk_tasks]
+
+        if chunk_summaries:
+            final_messages = []
+            if system_msg:
+                final_messages.append(system_msg)
+            final_messages.append({
+                "role": "user",
+                "content": f"Please provide a cohesive summary combining these {len(chunks)} analysis parts:\n\n" + 
+                          "\n\n".join(f"Part {i+1}:\n{summary}" for i, summary in enumerate(chunk_summaries))
+            })
+
+            return await self._async_make_request(final_messages, depth + 1)
+        else:
+            raise ValueError("Failed to process any chunks")
+
+    async def async_summarize_changes(self, commits: List[CommitInfo], diff: Optional[str] = None) -> str:
+        """Generate an async summary of changes from commits and optional diff."""
+        commit_summaries = []
+        for commit in commits:
+            summary = {
+                "hash": commit.hash[:8],
+                "message": commit.message,
+                "author": commit.author,
+                "date": commit.date,
+                "stats": {
+                    "files_changed": len(commit.files_changed),
+                    "insertions": commit.insertions,
+                    "deletions": commit.deletions,
+                },
+                "files": commit.files_changed,
+            }
+            commit_summaries.append(summary)
+
+        messages = [
+            {
+                "role": "system",
+                "content": """You are an expert code reviewer analyzing changes made in a fork of a GitHub repository.
+                Your task is to provide a clear, concise summary of the changes and innovations introduced in the fork.
+                Focus on:
+                1. The main themes or purposes of the changes
+                2. Any significant new features or improvements
+                3. Notable code refactoring or architectural changes
+                4. Potential impact or value of the changes
+
+                Provide a list of tags that apply to the changes from:
+                - "installation" - changes to the installation and packaging process, including dependencies via Docker, pip, conda etc
+                - "feature" - adds a significant new feature
+                - "functionality" - changes or improves the behavior of an existing feature
+                - "bugfix" - fixes a bug
+                - "improvement" - improves performance or reliability
+                - "ui" - changes or improves the user interface, including command line interface
+                - "refactor" - changes the code structure without adding new features, cleans up unused code
+                - "documentation" - adds or improves documentation
+                - "test" - adds or improves tests
+                - "ci" - adds or improves CI/CD
+                - "whitespace" - only whitespace changes, no significant code changes
+                
+                Be objective and technical, but make the summary accessible to developers."""
+            },
+            {
+                "role": "user",
+                "content": f"""Please analyze these changes and provide a summary:
+                
+                Commits: {json.dumps(commit_summaries, indent=2)}
+                
+                {"Diff:" + diff if diff else ""}""",
+            },
+        ]
+
+        return await self._async_make_request(messages)
+
+    async def async_generate_summary(self, prompt: str) -> str:
+        """Generate a high-level summary using a custom prompt asynchronously."""
+        messages = [
+            {
+                "role": "system",
+                "content": """You are an expert code analyst reviewing forks of a GitHub repository.
+                Your task is to identify and summarize the most interesting and impactful forks.
+                Focus on forks that:
+                1. Add significant new features or capabilities
+                2. Make major improvements to functionality or performance
+                3. Introduce innovative approaches or solutions
+                4. Have potential value for the main repository
+
+                Provide a concise, well-organized summary that highlights:
+                - The most notable forks and their key contributions
+                - The potential impact or value of their changes
+                - Any emerging patterns or themes across multiple forks
+
+                Be objective and technical, but make the summary accessible to developers.
+                Avoid detailed descriptions of installation-focused forks unless they introduce significant architectural changes.
+                
+                Write one or two paragraphs in Markdown, including hyperlinks, discussing your findings.""",
+            },
+            {"role": "user", "content": prompt},
+        ]
+
+        return await self._async_make_request(messages)
+
+    # Synchronous wrappers for backward compatibility
+    def summarize_changes(self, commits: List[CommitInfo], diff: Optional[str] = None) -> str:
+        """Synchronous wrapper for async_summarize_changes."""
+        return asyncio.run(self.async_summarize_changes(commits, diff))
+
+    def generate_summary(self, prompt: str) -> str:
+        """Synchronous wrapper for async_generate_summary."""
+        return asyncio.run(self.async_generate_summary(prompt))
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self._async_client.aclose()

@@ -1,7 +1,8 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import logging
 from pathlib import Path
 import re
+import asyncio
 
 from jinja2 import Environment, PackageLoader, select_autoescape
 
@@ -32,7 +33,33 @@ class ReportGenerator:
         # Add custom filter
         self.env.filters['linkify_commits'] = lambda text: _linkify_commit_hashes(text, self.repo_url)
 
-    def _generate_interesting_forks_summary(
+    async def _analyze_fork(self, fork: ForkInfo, git_repo: GitRepo) -> Optional[Dict[str, Any]]:
+        """Analyze a single fork asynchronously."""
+        try:
+            commits = git_repo.get_fork_commits(fork)
+
+            diff = None
+            if commits and len(commits[0].files_changed) > 0:
+                diff = git_repo.get_file_diff(fork, commits[0].files_changed[0])
+
+            summary = await self.llm_client.async_summarize_changes(commits, diff)
+
+            return {"fork": fork, "commits": commits, "summary": summary}
+
+        except Exception as e:
+            logger.error(f"Error analyzing fork {fork.repo_info.name}: {e}")
+            return None
+
+    async def _analyze_fork_batch(self, forks: List[ForkInfo], git_repo: GitRepo) -> List[Dict[str, Any]]:
+        """Analyze a batch of forks in parallel."""
+        tasks = []
+        for fork in forks:
+            tasks.append(self._analyze_fork(fork, git_repo))
+
+        results = await asyncio.gather(*tasks)
+        return [r for r in results if r is not None]
+
+    async def _generate_interesting_forks_summary(
         self, analyses: List[Dict[str, Any]]
     ) -> str:
         """Generate a high-level summary of the most interesting forks using the LLM."""
@@ -54,48 +81,36 @@ class ReportGenerator:
             + "\n---\n".join(fork_summaries)
         )
 
-        return self.llm_client.generate_summary(prompt)
+        return await self.llm_client.async_generate_summary(prompt)
 
-    def generate(
+    async def async_generate(
         self, repo_info: RepoInfo, forks: List[ForkInfo], git_repo: GitRepo
     ) -> str:
-        """Generate a Markdown report summarizing the forks."""
+        """Generate a Markdown report summarizing the forks asynchronously."""
         template = self.env.get_template("master.md.jinja")
 
         # Construct GitHub repository URL and store it for the filter
         self.repo_url = f"https://github.com/{repo_info.owner}/{repo_info.name}"
 
-        # Analyze each fork
+        # Process forks in batches
         fork_analyses = []
-        for fork in forks:
-            try:
-                # Get commits unique to this fork
-                commits = git_repo.get_fork_commits(fork)
+        for i in range(0, len(forks), self.llm_client.max_parallel):
+            batch = forks[i:i + self.llm_client.max_parallel]
+            batch_results = await self._analyze_fork_batch(batch, git_repo)
+            fork_analyses.extend(batch_results)
 
-                # Get a sample diff if there are many files changed
-                diff = None
-                if commits and len(commits[0].files_changed) > 0:
-                    # Get diff of the first changed file in the first commit
-                    diff = git_repo.get_file_diff(fork, commits[0].files_changed[0])
+        # Generate high-level summary
+        interesting_forks_summary = await self._generate_interesting_forks_summary(fork_analyses)
 
-                # Get LLM summary of changes
-                summary = self.llm_client.summarize_changes(commits, diff)
-
-                fork_analyses.append(
-                    {"fork": fork, "commits": commits, "summary": summary}
-                )
-
-            except Exception as e:
-                logger.error(f"Error analyzing fork {fork.repo_info.name}: {e}")
-                continue
-
-        # Generate the interesting forks summary
-        interesting_summary = self._generate_interesting_forks_summary(fork_analyses)
-
-        # Generate the report
+        # Render template
         return template.render(
             repo=repo_info,
             analyses=fork_analyses,
-            repo_url=self.repo_url,
-            summary=interesting_summary,
+            interesting_forks_summary=interesting_forks_summary,
         )
+
+    def generate(
+        self, repo_info: RepoInfo, forks: List[ForkInfo], git_repo: GitRepo
+    ) -> str:
+        """Synchronous wrapper for async_generate."""
+        return asyncio.run(self.async_generate(repo_info, forks, git_repo))

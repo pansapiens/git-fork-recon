@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import shutil
 from datetime import datetime, timedelta, timezone
+import asyncio
 
 import typer
 from rich.console import Console
@@ -94,6 +95,7 @@ def analyze(
     env_file: Optional[Path] = None,
     model: Optional[str] = None,
     context_length: Optional[int] = None,
+    parallel: int = typer.Option(5, "--parallel", "-p", help="Number of parallel requests"),
     verbose: bool = False,
     clear_cache: bool = typer.Option(False, "--clear-cache", help="Clear cached repository data before analysis"),
 ) -> None:
@@ -110,12 +112,13 @@ def analyze(
     if context_length is not None:
         config.context_length = context_length
 
-    # Initialize clients
-    github_client = GithubClient(config.github_token)
+    # Initialize clients with parallel option
+    github_client = GithubClient(config.github_token, max_parallel=parallel)
     llm_client = LLMClient(
         config.openrouter_api_key,
         model=config.model,
-        context_length=config.context_length
+        context_length=config.context_length,
+        max_parallel=parallel
     )
 
     try:
@@ -129,12 +132,11 @@ def analyze(
             output = Path(f"{owner}-{repo}-forks.md")
             logger.info(f"No output file specified, using default: {output}")
 
-        # Parse active_within if specified
+        # Parse active_within if provided
         activity_threshold = None
         if active_within:
             try:
                 delta = parse_time_duration(active_within)
-                # Use timezone-aware datetime for comparison
                 activity_threshold = datetime.now(timezone.utc) - delta
                 logger.info(f"Only considering forks active since {activity_threshold}")
             except ValueError as e:
@@ -164,10 +166,10 @@ def analyze(
             ]
             logger.info(f"Found {len(forks)} forks active within {active_within}")
 
-        # Analyze forks and generate report
+        # Generate report
         report = report_gen.generate(repo_info, forks, git_repo)
 
-        # Output report
+        # Write report to file or stdout
         if str(output) == "-":
             console.print(report)
         else:
@@ -175,7 +177,7 @@ def analyze(
             logger.info(f"Report written to {output}")
 
     except Exception as e:
-        logger.error(f"Error analyzing repository: {e}", exc_info=verbose)
+        logger.error(f"Error analyzing repository: {e}", exc_info=True)
         sys.exit(1)
 
 
