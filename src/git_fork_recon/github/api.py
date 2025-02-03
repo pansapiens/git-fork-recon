@@ -186,8 +186,8 @@ class GithubClient:
         """Extract owner and repo name from GitHub URL."""
         # Remove trailing slash if present
         url = url.rstrip("/")
-        pattern = r"github\.com[:/]([^/]+)/([^/]+)"
+        pattern = r"github\.com[:/]([^/]+)/([^/\s]+?)(?:\.git)?$"
         match = re.search(pattern, url)
         if not match:
             raise ValueError(f"Invalid GitHub URL: {url}")
-        return match.group(1), match.group(2).rstrip(".git")
+        return match.group(1), match.group(2)
