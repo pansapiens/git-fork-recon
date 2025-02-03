@@ -44,7 +44,9 @@ class GithubClient:
         self.client = Github(token)
         self.max_parallel = max_parallel
 
-    async def _process_fork(self, repo: Repository, fork: Repository) -> Optional[ForkInfo]:
+    async def _process_fork(
+        self, repo: Repository, fork: Repository
+    ) -> Optional[ForkInfo]:
         """Process a single fork asynchronously."""
         try:
             logger.debug(f"Processing fork: {fork.full_name}")
@@ -71,9 +73,7 @@ class GithubClient:
                 )
                 return None
             except Exception as e:
-                logger.warning(
-                    f"Failed to compare branches for {fork.full_name}: {e}"
-                )
+                logger.warning(f"Failed to compare branches for {fork.full_name}: {e}")
                 return None
 
             pr_spec = f"{fork.owner.login}:{fork.default_branch}"
@@ -120,7 +120,9 @@ class GithubClient:
             )
             return None
 
-    async def _process_fork_batch(self, repo: Repository, forks: List[Repository]) -> List[ForkInfo]:
+    async def _process_fork_batch(
+        self, repo: Repository, forks: List[Repository]
+    ) -> List[ForkInfo]:
         """Process a batch of forks in parallel."""
         tasks = []
         for fork in forks:
@@ -140,14 +142,16 @@ class GithubClient:
         # Process forks in batches
         processed_forks = []
         for i in range(0, len(forks), self.max_parallel):
-            batch = forks[i:i + self.max_parallel]
+            batch = forks[i : i + self.max_parallel]
             batch_results = await self._process_fork_batch(repo, batch)
             processed_forks.extend(batch_results)
 
         logger.info(
             f"Found {len(processed_forks)} active forks with changes out of {len(forks)} total forks"
         )
-        processed_forks.sort(key=lambda x: (x.ahead_commits, x.repo_info.stars), reverse=True)
+        processed_forks.sort(
+            key=lambda x: (x.ahead_commits, x.repo_info.stars), reverse=True
+        )
         return processed_forks
 
     def get_forks(self, repo_info: RepoInfo) -> List[ForkInfo]:
@@ -180,6 +184,8 @@ class GithubClient:
 
     def _parse_repo_url(self, url: str) -> tuple[str, str]:
         """Extract owner and repo name from GitHub URL."""
+        # Remove trailing slash if present
+        url = url.rstrip("/")
         pattern = r"github\.com[:/]([^/]+)/([^/]+)"
         match = re.search(pattern, url)
         if not match:

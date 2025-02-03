@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 def parse_time_duration(duration: str) -> timedelta:
     """Parse a human-readable time duration into a timedelta.
-    
+
     Supports formats like:
     - '1 hour', '2 hours'
     - '1 day', '3 days'
@@ -38,32 +38,34 @@ def parse_time_duration(duration: str) -> timedelta:
     duration = duration.lower()
     total_days = 0
     total_seconds = 0
-    
+
     # Extract all number-unit pairs, stripping plural 's' from unit
-    pairs = re.findall(r'(\d+)\s*([a-z]+?)s?\b(?:\s+|$)', duration)
+    pairs = re.findall(r"(\d+)\s*([a-z]+?)s?\b(?:\s+|$)", duration)
     if not pairs:
         raise ValueError(f"Could not parse time duration: {duration}")
-        
+
     for value_str, unit in pairs:
         value = int(value_str)
-        if unit in ('hour', 'hr', 'h'):
+        if unit in ("hour", "hr", "h"):
             total_seconds += value * 3600
-        elif unit in ('day', 'd'):
+        elif unit in ("day", "d"):
             total_days += value
-        elif unit in ('week', 'wk', 'w'):
+        elif unit in ("week", "wk", "w"):
             total_days += value * 7
-        elif unit in ('month', 'mo', 'm'):
+        elif unit in ("month", "mo", "m"):
             total_days += value * 30  # Approximate
-        elif unit in ('year', 'yr', 'y'):
+        elif unit in ("year", "yr", "y"):
             total_days += value * 365  # Approximate
         else:
             raise ValueError(f"Unknown time unit: {unit}")
-            
+
     return timedelta(days=total_days, seconds=total_seconds)
 
 
 def parse_github_url(url: str) -> Tuple[str, str]:
     """Extract owner and repository name from a GitHub URL."""
+    # Remove trailing slash if present
+    url = url.rstrip("/")
     pattern = r"github\.com[:/]([^/]+)/([^/]+?)(?:\.git)?$"
     match = re.search(pattern, url)
     if not match:
@@ -95,9 +97,13 @@ def analyze(
     env_file: Optional[Path] = None,
     model: Optional[str] = None,
     context_length: Optional[int] = None,
-    parallel: int = typer.Option(5, "--parallel", "-p", help="Number of parallel requests"),
+    parallel: int = typer.Option(
+        5, "--parallel", "-p", help="Number of parallel requests"
+    ),
     verbose: bool = False,
-    clear_cache: bool = typer.Option(False, "--clear-cache", help="Clear cached repository data before analysis"),
+    clear_cache: bool = typer.Option(
+        False, "--clear-cache", help="Clear cached repository data before analysis"
+    ),
 ) -> None:
     """Analyze forks of a GitHub repository."""
     # Set up logging
@@ -118,7 +124,7 @@ def analyze(
         config.openrouter_api_key,
         model=config.model,
         context_length=config.context_length,
-        max_parallel=parallel
+        max_parallel=parallel,
     )
 
     try:
@@ -161,7 +167,8 @@ def analyze(
         forks = github_client.get_forks(repo_info)
         if activity_threshold:
             forks = [
-                fork for fork in forks 
+                fork
+                for fork in forks
                 if datetime.fromisoformat(fork.last_updated) >= activity_threshold
             ]
             logger.info(f"Found {len(forks)} forks active within {active_within}")
