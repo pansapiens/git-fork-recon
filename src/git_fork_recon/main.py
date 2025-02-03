@@ -95,6 +95,7 @@ def analyze(
     model: Optional[str] = None,
     context_length: Optional[int] = None,
     verbose: bool = False,
+    clear_cache: bool = typer.Option(False, "--clear-cache", help="Clear cached repository data before analysis"),
 ) -> None:
     """Analyze forks of a GitHub repository."""
     # Set up logging
@@ -146,8 +147,8 @@ def analyze(
         # Get repository and fork information
         repo_info = github_client.get_repository(repo_full_name)
 
-        # Clear cache if requested
-        if config.cache_dir:
+        # Clear cache only if requested
+        if clear_cache and config.cache_dir:
             repo_cache = config.cache_dir / f"{owner}-{repo}"
             clear_repo_cache(repo_cache)
 
