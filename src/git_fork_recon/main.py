@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 import re
 import shutil
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import typer
 from rich.console import Console
@@ -88,33 +88,36 @@ def clear_repo_cache(repo_dir: Path) -> None:
 
 @app.command()
 def analyze(
-    repo_url: str = typer.Argument(..., help="URL of the GitHub repository to analyze"),
-    output: Optional[Path] = typer.Option(
-        None,
-        "--output",
-        "-o",
-        help="Output file path for the report. Use '-' for stdout. Defaults to {username}-{repo}-forks.md",
-    ),
-    verbose: bool = typer.Option(
-        False, "--verbose", "-v", help="Enable verbose logging"
-    ),
-    clear_cache: bool = typer.Option(
-        False, "--clear-cache", help="Clear cached repository data before analysis"
-    ),
-    active_within: Optional[str] = typer.Option(
-        None,
-        "--active-within",
-        help="Only consider forks with activity within this time period (e.g. '1 hour', '2 days', '6 months', '1 year')",
-    ),
+    repo_url: str,
+    output: Optional[Path] = None,
+    active_within: Optional[str] = None,
+    env_file: Optional[Path] = None,
+    model: Optional[str] = None,
+    context_length: Optional[int] = None,
+    verbose: bool = False,
 ) -> None:
-    """Analyze a GitHub repository's fork network and generate a summary report."""
+    """Analyze forks of a GitHub repository."""
+    # Set up logging
     setup_logging(verbose)
 
-    try:
-        config = load_config()
-        github_client = GithubClient(config.github_token)
-        llm_client = LLMClient(config.openrouter_api_key)
+    # Load config
+    config = load_config(env_file)
 
+    # Override config with command line options if provided
+    if model is not None:
+        config.model = model
+    if context_length is not None:
+        config.context_length = context_length
+
+    # Initialize clients
+    github_client = GithubClient(config.github_token)
+    llm_client = LLMClient(
+        config.openrouter_api_key,
+        model=config.model,
+        context_length=config.context_length
+    )
+
+    try:
         # Parse repository URL
         owner, repo = parse_github_url(repo_url)
         repo_full_name = f"{owner}/{repo}"
@@ -130,7 +133,8 @@ def analyze(
         if active_within:
             try:
                 delta = parse_time_duration(active_within)
-                activity_threshold = datetime.now() - delta
+                # Use timezone-aware datetime for comparison
+                activity_threshold = datetime.now(timezone.utc) - delta
                 logger.info(f"Only considering forks active since {activity_threshold}")
             except ValueError as e:
                 logger.error(f"Invalid active-within format: {e}")
@@ -143,7 +147,7 @@ def analyze(
         repo_info = github_client.get_repository(repo_full_name)
 
         # Clear cache if requested
-        if clear_cache:
+        if config.cache_dir:
             repo_cache = config.cache_dir / f"{owner}-{repo}"
             clear_repo_cache(repo_cache)
 

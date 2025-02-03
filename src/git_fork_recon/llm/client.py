@@ -1,43 +1,168 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import logging
 import json
+import tiktoken
+import sys
 
 import httpx
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from ..git.repo import CommitInfo
 
 logger = logging.getLogger(__name__)
 
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
+
+# Configure retry decorator
+retry_decorator = retry(
+    stop=stop_after_attempt(3),  # Try 3 times
+    wait=wait_exponential(multiplier=1, min=4, max=10),  # Wait 2^x * multiplier seconds between retries
+    retry=retry_if_exception_type((httpx.TimeoutException, httpx.HTTPError)),
+    before_sleep=lambda retry_state: logger.warning(
+        f"Attempt {retry_state.attempt_number} failed. Retrying in {retry_state.next_action.sleep} seconds..."
+    ),
+)
 
 
 class LLMClient:
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, model: str = "deepseek/deepseek-chat", context_length: Optional[int] = None):
         self.api_key = api_key
+        self.model_name = model
         self.headers = {
             "Authorization": f"Bearer {api_key}",
             "HTTP-Referer": "https://github.com/git-fork-recon",
             "Content-Type": "application/json",
         }
+        self.model_info: Optional[Dict[str, Any]] = None
+        self._context_length_override = context_length
+        self.tokenizer = tiktoken.encoding_for_model("gpt-4")  # Reasonable default for most models
+        self._init_model_info()
 
-    def _make_request(self, messages: List[dict]) -> str:
-        """Make a request to the OpenRouter API."""
+    @retry_decorator
+    def _init_model_info(self) -> None:
+        """Fetch model information from OpenRouter API."""
+        try:
+            response = httpx.get(OPENROUTER_MODELS_URL, headers=self.headers, timeout=30.0)
+            response.raise_for_status()
+            models = response.json()
+            for model in models["data"]:
+                if model["id"] == self.model_name:
+                    self.model_info = model
+                    if self.model_info is not None:
+                        logger.info(f"Model context length: {self.model_info.get('context_length', 'unknown')}")
+                    return
+            logger.warning(f"Model {self.model_name} not found in OpenRouter models list")
+        except Exception as e:
+            logger.error(f"Error fetching model info: {e}")
+            self.model_info = None
+            raise
+
+    def _get_token_count(self, text: str) -> int:
+        """Get approximate token count for text."""
+        return len(self.tokenizer.encode(text))
+
+    def _chunk_text(self, text: str, max_tokens: int) -> List[str]:
+        """Split text into chunks that fit within token limit."""
+        tokens = self.tokenizer.encode(text)
+        chunks: List[str] = []
+        current_chunk: List[int] = []
+        
+        # Reserve tokens for system message and response
+        chunk_limit = max_tokens - 1000  # Reserve 1000 tokens for system message and response
+        
+        for token in tokens:
+            current_chunk.append(token)
+            if len(current_chunk) >= chunk_limit:
+                chunks.append(self.tokenizer.decode(current_chunk))
+                current_chunk = []
+        
+        if current_chunk:
+            chunks.append(self.tokenizer.decode(current_chunk))
+            
+        return chunks
+
+    @retry_decorator
+    def _make_direct_request(self, messages: List[dict]) -> str:
+        """Make a direct request to the OpenRouter API without chunking."""
         data = {
-            "model": "deepseek/deepseek-chat",
+            "model": self.model_name,
             "messages": messages,
             "temperature": 0.7,
             "max_tokens": 1000,
         }
-
         try:
             response = httpx.post(
-                OPENROUTER_API_URL, headers=self.headers, json=data, timeout=30.0
+                OPENROUTER_API_URL, headers=self.headers, json=data, timeout=60.0
             )
             response.raise_for_status()
             return response.json()["choices"][0]["message"]["content"]
         except Exception as e:
             logger.error(f"Error making LLM request: {e}")
             raise
+
+    def _make_request(self, messages: List[dict], depth: int = 0) -> str:
+        """Make a request to the OpenRouter API with chunking if needed."""
+        if depth > 1:
+            raise ValueError("Maximum chunk processing depth exceeded")
+
+        # Get max context length from override or model info
+        context_length = self._context_length_override
+        if context_length is None and self.model_info is not None:
+            context_length = self.model_info.get("context_length", 8192)  # Default to 8192 if unknown
+        else:
+            context_length = 8192  # Fallback default
+        
+        # Calculate total tokens in messages
+        total_tokens = sum(self._get_token_count(msg["content"]) for msg in messages)
+        
+        # If within limits, proceed normally
+        if total_tokens <= context_length - 1000:  # Reserve 1000 tokens for response
+            return self._make_direct_request(messages)
+        
+        # If over limit, need to chunk and summarize
+        logger.warning(f"Input exceeds token limit. Chunking input ({total_tokens} tokens)")
+        
+        # Only chunk the user message, keep system message intact
+        system_msg = next((m for m in messages if m["role"] == "system"), None)
+        user_msg = next((m for m in messages if m["role"] == "user"), None)
+        
+        if not user_msg:
+            raise ValueError("No user message found in messages")
+            
+        chunks = self._chunk_text(user_msg["content"], context_length)
+        chunk_summaries = []
+        
+        for i, chunk in enumerate(chunks):
+            chunk_messages = []
+            if system_msg:
+                chunk_messages.append(system_msg)
+            chunk_messages.append({
+                "role": "user",
+                "content": f"This is part {i+1} of {len(chunks)} of the input. Please analyze this part:\n\n{chunk}"
+            })
+            
+            try:
+                summary = self._make_direct_request(chunk_messages)
+                chunk_summaries.append(summary)
+            except Exception as e:
+                logger.error(f"Error processing chunk {i+1}: {e}")
+                continue
+                
+        # Combine chunk summaries
+        if chunk_summaries:
+            final_messages = []
+            if system_msg:
+                final_messages.append(system_msg)
+            final_messages.append({
+                "role": "user",
+                "content": f"Please provide a cohesive summary combining these {len(chunks)} analysis parts:\n\n" + 
+                          "\n\n".join(f"Part {i+1}:\n{summary}" for i, summary in enumerate(chunk_summaries))
+            })
+            
+            return self._make_request(final_messages, depth + 1)
+        else:
+            raise ValueError("Failed to process any chunks")
 
     def summarize_changes(
         self, commits: List[CommitInfo], diff: Optional[str] = None
