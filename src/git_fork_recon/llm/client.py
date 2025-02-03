@@ -7,7 +7,12 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
 import httpx
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
 
 from ..git.repo import CommitInfo
 
@@ -19,7 +24,9 @@ OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 # Configure retry decorator
 retry_decorator = retry(
     stop=stop_after_attempt(3),  # Try 3 times
-    wait=wait_exponential(multiplier=1, min=4, max=10),  # Wait 2^x * multiplier seconds between retries
+    wait=wait_exponential(
+        multiplier=1, min=4, max=10
+    ),  # Wait 2^x * multiplier seconds between retries
     retry=retry_if_exception_type((httpx.TimeoutException, httpx.HTTPError)),
     before_sleep=lambda retry_state: logger.warning(
         f"Attempt {retry_state.attempt_number} failed. Retrying in {retry_state.next_action.sleep} seconds..."
@@ -28,7 +35,13 @@ retry_decorator = retry(
 
 
 class LLMClient:
-    def __init__(self, api_key: str, model: str = "deepseek/deepseek-chat", context_length: Optional[int] = None, max_parallel: int = 5):
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "deepseek/deepseek-chat",
+        context_length: Optional[int] = None,
+        max_parallel: int = 5,
+    ):
         self.api_key = api_key
         self.model_name = model
         self.headers = {
@@ -38,7 +51,9 @@ class LLMClient:
         }
         self.model_info: Optional[Dict[str, Any]] = None
         self._context_length_override = context_length
-        self.tokenizer = tiktoken.encoding_for_model("gpt-4")  # Reasonable default for most models
+        self.tokenizer = tiktoken.encoding_for_model(
+            "gpt-4"
+        )  # Reasonable default for most models
         self.max_parallel = max_parallel
         self._init_model_info()
         self._executor = ThreadPoolExecutor(max_workers=max_parallel)
@@ -48,16 +63,22 @@ class LLMClient:
     def _init_model_info(self) -> None:
         """Fetch model information from OpenRouter API."""
         try:
-            response = httpx.get(OPENROUTER_MODELS_URL, headers=self.headers, timeout=30.0)
+            response = httpx.get(
+                OPENROUTER_MODELS_URL, headers=self.headers, timeout=30.0
+            )
             response.raise_for_status()
             models = response.json()
             for model in models["data"]:
                 if model["id"] == self.model_name:
                     self.model_info = model
                     if self.model_info is not None:
-                        logger.info(f"Model context length: {self.model_info.get('context_length', 'unknown')}")
+                        logger.info(
+                            f"Model context length: {self.model_info.get('context_length', 'unknown')}"
+                        )
                     return
-            logger.warning(f"Model {self.model_name} not found in OpenRouter models list")
+            logger.warning(
+                f"Model {self.model_name} not found in OpenRouter models list"
+            )
         except Exception as e:
             logger.error(f"Error fetching model info: {e}")
             self.model_info = None
@@ -72,19 +93,21 @@ class LLMClient:
         tokens = self.tokenizer.encode(text)
         chunks: List[str] = []
         current_chunk: List[int] = []
-        
+
         # Reserve tokens for system message and response
-        chunk_limit = max_tokens - 1000  # Reserve 1000 tokens for system message and response
-        
+        chunk_limit = (
+            max_tokens - 1000
+        )  # Reserve 1000 tokens for system message and response
+
         for token in tokens:
             current_chunk.append(token)
             if len(current_chunk) >= chunk_limit:
                 chunks.append(self.tokenizer.decode(current_chunk))
                 current_chunk = []
-        
+
         if current_chunk:
             chunks.append(self.tokenizer.decode(current_chunk))
-            
+
         return chunks
 
     @retry_decorator
@@ -114,57 +137,68 @@ class LLMClient:
         # Get max context length from override or model info
         context_length = self._context_length_override
         if context_length is None and self.model_info is not None:
-            context_length = self.model_info.get("context_length", 8192)  # Default to 8192 if unknown
+            context_length = self.model_info.get(
+                "context_length", 8192
+            )  # Default to 8192 if unknown
         else:
             context_length = 8192  # Fallback default
-        
+
         # Calculate total tokens in messages
         total_tokens = sum(self._get_token_count(msg["content"]) for msg in messages)
-        
+
         # If within limits, proceed normally
         if total_tokens <= context_length - 1000:  # Reserve 1000 tokens for response
             return self._make_direct_request(messages)
-        
+
         # If over limit, need to chunk and summarize
-        logger.warning(f"Input exceeds token limit. Chunking input ({total_tokens} tokens)")
-        
+        logger.warning(
+            f"Input exceeds token limit. Chunking input ({total_tokens} tokens)"
+        )
+
         # Only chunk the user message, keep system message intact
         system_msg = next((m for m in messages if m["role"] == "system"), None)
         user_msg = next((m for m in messages if m["role"] == "user"), None)
-        
+
         if not user_msg:
             raise ValueError("No user message found in messages")
-            
+
         chunks = self._chunk_text(user_msg["content"], context_length)
         chunk_summaries = []
-        
+
         for i, chunk in enumerate(chunks):
             chunk_messages = []
             if system_msg:
                 chunk_messages.append(system_msg)
-            chunk_messages.append({
-                "role": "user",
-                "content": f"This is part {i+1} of {len(chunks)} of the input. Please analyze this part:\n\n{chunk}"
-            })
-            
+            chunk_messages.append(
+                {
+                    "role": "user",
+                    "content": f"This is part {i+1} of {len(chunks)} of the input. Please analyze this part:\n\n{chunk}",
+                }
+            )
+
             try:
                 summary = self._make_direct_request(chunk_messages)
                 chunk_summaries.append(summary)
             except Exception as e:
                 logger.error(f"Error processing chunk {i+1}: {e}")
                 continue
-                
+
         # Combine chunk summaries
         if chunk_summaries:
             final_messages = []
             if system_msg:
                 final_messages.append(system_msg)
-            final_messages.append({
-                "role": "user",
-                "content": f"Please provide a cohesive summary combining these {len(chunks)} analysis parts:\n\n" + 
-                          "\n\n".join(f"Part {i+1}:\n{summary}" for i, summary in enumerate(chunk_summaries))
-            })
-            
+            final_messages.append(
+                {
+                    "role": "user",
+                    "content": f"Please provide a cohesive summary combining these {len(chunks)} analysis parts:\n\n"
+                    + "\n\n".join(
+                        f"Part {i+1}:\n{summary}"
+                        for i, summary in enumerate(chunk_summaries)
+                    ),
+                }
+            )
+
             return self._make_request(final_messages, depth + 1)
         else:
             raise ValueError("Failed to process any chunks")
@@ -291,7 +325,9 @@ class LLMClient:
         if total_tokens <= context_length - 1000:
             return await self._async_make_direct_request(messages)
 
-        logger.warning(f"Input exceeds token limit. Chunking input ({total_tokens} tokens)")
+        logger.warning(
+            f"Input exceeds token limit. Chunking input ({total_tokens} tokens)"
+        )
 
         system_msg = next((m for m in messages if m["role"] == "system"), None)
         user_msg = next((m for m in messages if m["role"] == "user"), None)
@@ -306,33 +342,39 @@ class LLMClient:
             chunk_messages = []
             if system_msg:
                 chunk_messages.append(system_msg)
-            chunk_messages.append({
-                "role": "user",
-                "content": f"This is part {i+1} of {len(chunks)} of the input. Please analyze this part:\n\n{chunk}"
-            })
+            chunk_messages.append(
+                {
+                    "role": "user",
+                    "content": f"This is part {i+1} of {len(chunks)} of the input. Please analyze this part:\n\n{chunk}",
+                }
+            )
             chunk_tasks.append(self._async_make_direct_request(chunk_messages))
 
-        chunk_summaries = []
-        async with asyncio.TaskGroup() as tg:
-            for task in chunk_tasks:
-                tg.create_task(task)
-        chunk_summaries = [task.result() for task in chunk_tasks]
+        # Use gather instead of TaskGroup for Python 3.9 compatibility
+        chunk_summaries = await asyncio.gather(*chunk_tasks)
 
         if chunk_summaries:
             final_messages = []
             if system_msg:
                 final_messages.append(system_msg)
-            final_messages.append({
-                "role": "user",
-                "content": f"Please provide a cohesive summary combining these {len(chunks)} analysis parts:\n\n" + 
-                          "\n\n".join(f"Part {i+1}:\n{summary}" for i, summary in enumerate(chunk_summaries))
-            })
+            final_messages.append(
+                {
+                    "role": "user",
+                    "content": f"Please provide a cohesive summary combining these {len(chunks)} analysis parts:\n\n"
+                    + "\n\n".join(
+                        f"Part {i+1}:\n{summary}"
+                        for i, summary in enumerate(chunk_summaries)
+                    ),
+                }
+            )
 
             return await self._async_make_request(final_messages, depth + 1)
         else:
             raise ValueError("Failed to process any chunks")
 
-    async def async_summarize_changes(self, commits: List[CommitInfo], diff: Optional[str] = None) -> str:
+    async def async_summarize_changes(
+        self, commits: List[CommitInfo], diff: Optional[str] = None
+    ) -> str:
         """Generate an async summary of changes from commits and optional diff."""
         commit_summaries = []
         for commit in commits:
@@ -374,7 +416,7 @@ class LLMClient:
                 - "ci" - adds or improves CI/CD
                 - "whitespace" - only whitespace changes, no significant code changes
                 
-                Be objective and technical, but make the summary accessible to developers."""
+                Be objective and technical, but make the summary accessible to developers.""",
             },
             {
                 "role": "user",
@@ -417,11 +459,13 @@ class LLMClient:
         return await self._async_make_request(messages)
 
     # Synchronous wrappers for backward compatibility
-    def summarize_changes(self, commits: List[CommitInfo], diff: Optional[str] = None) -> str:
+    def sync_summarize_changes(
+        self, commits: List[CommitInfo], diff: Optional[str] = None
+    ) -> str:
         """Synchronous wrapper for async_summarize_changes."""
         return asyncio.run(self.async_summarize_changes(commits, diff))
 
-    def generate_summary(self, prompt: str) -> str:
+    def sync_generate_summary(self, prompt: str) -> str:
         """Synchronous wrapper for async_generate_summary."""
         return asyncio.run(self.async_generate_summary(prompt))
 
