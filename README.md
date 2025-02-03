@@ -22,7 +22,7 @@ Analyse the network of forked git repositories, summarise changes and innovation
 The following environment variables are required (can be provided via `.env` file):
 
 - `GITHUB_TOKEN`: GitHub API token for repository access
-- `OPENROUTER_API_KEY`: OpenRouter API key for LLM analysis
+- `OPENROUTER_API_KEY` or `OPENAI_API_KEY`: API key for LLM analysis
 - `CACHE_DIR` (optional): Directory for caching repository data (defaults to `~/.cache/git-fork-recon`)
 
 ## Input
@@ -32,6 +32,27 @@ The following environment variables are required (can be provided via `.env` fil
 ## Output
 
 - A Markdown document summarising the changes and innovations from each of the the forked repositories, focusing on those with the most significant changes.
+
+## Installation
+
+Using `uv` (recommended):
+```bash
+# Install uv if you haven't already
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create and activate a new virtual environment (optional but recommended)
+uv venv
+source .venv/bin/activate
+
+# Install the package in editable mode
+uv pip install -e .
+```
+
+## Running
+
+```bash
+git-fork-recon analyze https://github.com/martinpacesa/BindCraft
+```
 
 ## Running with Docker
 

@@ -5,6 +5,7 @@ import tiktoken
 import sys
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import urljoin
 
 import httpx
 from tenacity import (
@@ -18,8 +19,7 @@ from ..git.repo import CommitInfo
 
 logger = logging.getLogger(__name__)
 
-OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
-OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
+DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 
 # Configure retry decorator
 retry_decorator = retry(
@@ -38,12 +38,17 @@ class LLMClient:
     def __init__(
         self,
         api_key: str,
-        model: str = "deepseek/deepseek-chat",
+        model: str = "mistralai/mistral-small-24b-instruct-2501",
         context_length: Optional[int] = None,
+        api_base_url: str = DEFAULT_BASE_URL,
         max_parallel: int = 5,
     ):
         self.api_key = api_key
         self.model_name = model
+        # Ensure api_base_url ends with a slash for proper URL joining
+        self.api_base_url = (
+            api_base_url if api_base_url.endswith("/") else api_base_url + "/"
+        )
         self.headers = {
             "Authorization": f"Bearer {api_key}",
             "HTTP-Referer": "https://github.com/git-fork-recon",
@@ -55,17 +60,26 @@ class LLMClient:
             "gpt-4"
         )  # Reasonable default for most models
         self.max_parallel = max_parallel
-        self._init_model_info()
         self._executor = ThreadPoolExecutor(max_workers=max_parallel)
-        self._async_client = httpx.AsyncClient(timeout=60.0)
+        self._async_client = httpx.AsyncClient(timeout=600.0)
+        # Initialize model info after all configuration is set
+        self._init_model_info()
+
+    @property
+    def chat_completions_url(self) -> str:
+        """Get the chat completions endpoint URL."""
+        return urljoin(self.api_base_url, "chat/completions")
+
+    @property
+    def models_url(self) -> str:
+        """Get the models endpoint URL."""
+        return urljoin(self.api_base_url, "models")
 
     @retry_decorator
     def _init_model_info(self) -> None:
-        """Fetch model information from OpenRouter API."""
+        """Fetch model information from OpenAI-compatible API."""
         try:
-            response = httpx.get(
-                OPENROUTER_MODELS_URL, headers=self.headers, timeout=30.0
-            )
+            response = httpx.get(self.models_url, headers=self.headers, timeout=30.0)
             response.raise_for_status()
             models = response.json()
             for model in models["data"]:
@@ -76,9 +90,7 @@ class LLMClient:
                             f"Model context length: {self.model_info.get('context_length', 'unknown')}"
                         )
                     return
-            logger.warning(
-                f"Model {self.model_name} not found in OpenRouter models list"
-            )
+            logger.warning(f"Model {self.model_name} not found in API models list")
         except Exception as e:
             logger.error(f"Error fetching model info: {e}")
             self.model_info = None
@@ -112,7 +124,7 @@ class LLMClient:
 
     @retry_decorator
     def _make_direct_request(self, messages: List[dict]) -> str:
-        """Make a direct request to the OpenRouter API without chunking."""
+        """Make a direct request to the API without chunking."""
         data = {
             "model": self.model_name,
             "messages": messages,
@@ -121,7 +133,10 @@ class LLMClient:
         }
         try:
             response = httpx.post(
-                OPENROUTER_API_URL, headers=self.headers, json=data, timeout=60.0
+                self.chat_completions_url,
+                headers=self.headers,
+                json=data,
+                timeout=600.0,
             )
             response.raise_for_status()
             return response.json()["choices"][0]["message"]["content"]
@@ -292,7 +307,7 @@ class LLMClient:
         return self._make_request(messages)
 
     async def _async_make_direct_request(self, messages: List[dict]) -> str:
-        """Make an async direct request to the OpenRouter API without chunking."""
+        """Make an async direct request to the API without chunking."""
         data = {
             "model": self.model_name,
             "messages": messages,
@@ -301,7 +316,7 @@ class LLMClient:
         }
         try:
             response = await self._async_client.post(
-                OPENROUTER_API_URL, headers=self.headers, json=data
+                self.chat_completions_url, headers=self.headers, json=data
             )
             response.raise_for_status()
             return response.json()["choices"][0]["message"]["content"]

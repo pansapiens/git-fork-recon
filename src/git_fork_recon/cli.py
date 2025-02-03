@@ -37,7 +37,9 @@ def main(
         "--context-length",
         help="Override model context length (overrides CONTEXT_LENGTH env var)",
     ),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose logging"),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Enable verbose logging"
+    ),
 ) -> None:
     """Analyze a GitHub repository's fork network and generate a summary report."""
     analyze(
@@ -48,4 +50,4 @@ def main(
         model=model,
         context_length=context_length,
         verbose=verbose,
-    ) 
+    )

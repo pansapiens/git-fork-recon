@@ -8,6 +8,8 @@ import re
 import shutil
 from datetime import datetime, timedelta, timezone
 import asyncio
+import os
+from dotenv import load_dotenv
 
 import typer
 from rich.console import Console
@@ -18,6 +20,9 @@ from .github.api import GithubClient
 from .git.repo import GitRepo
 from .llm.client import LLMClient
 from .report.generator import ReportGenerator
+
+# Load environment variables from .env file at startup
+load_dotenv()
 
 app = typer.Typer()
 console = Console()
@@ -97,6 +102,14 @@ def analyze(
     env_file: Optional[Path] = None,
     model: Optional[str] = None,
     context_length: Optional[int] = None,
+    api_base_url: Optional[str] = typer.Option(
+        None, "--api-base-url", help="OpenAI-compatible API base URL"
+    ),
+    api_key_env_var: Optional[str] = typer.Option(
+        None,
+        "--api-key-env-var",
+        help="Environment variable containing the API key",
+    ),
     parallel: int = typer.Option(
         5, "--parallel", "-p", help="Number of parallel requests"
     ),
@@ -109,21 +122,34 @@ def analyze(
     # Set up logging
     setup_logging(verbose)
 
-    # Load config
-    config = load_config(env_file)
+    # Load config and apply overrides
+    config = load_config(env_file, api_key_env_var=api_key_env_var)
 
     # Override config with command line options if provided
     if model is not None:
         config.model = model
     if context_length is not None:
         config.context_length = context_length
+    if api_base_url is not None:
+        config.openai_api_base_url = api_base_url
+
+    # Log final configuration
+    logger.info(f"Found GITHUB_TOKEN: {'yes' if config.github_token else 'no'}")
+    logger.info(f"Using API key from: {config.api_key_source}")
+    logger.info(f"Found API key: {'yes' if config.openai_api_key else 'no'}")
+    logger.info(f"Using API base URL: {config.openai_api_base_url}")
+    logger.info(f"Using CACHE_DIR: {config.cache_dir}")
+    logger.info(f"Using MODEL: {config.model}")
+    if config.context_length is not None:
+        logger.info(f"Using CONTEXT_LENGTH override: {config.context_length}")
 
     # Initialize clients with parallel option
     github_client = GithubClient(config.github_token, max_parallel=parallel)
     llm_client = LLMClient(
-        config.openrouter_api_key,
+        config.openai_api_key,
         model=config.model,
         context_length=config.context_length,
+        api_base_url=config.openai_api_base_url,
         max_parallel=parallel,
     )
 
