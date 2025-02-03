@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 import re
 import shutil
+from datetime import datetime, timedelta
 
 import typer
 from rich.console import Console
@@ -20,6 +21,44 @@ from .report.generator import ReportGenerator
 app = typer.Typer()
 console = Console()
 logger = logging.getLogger(__name__)
+
+
+def parse_time_duration(duration: str) -> timedelta:
+    """Parse a human-readable time duration into a timedelta.
+    
+    Supports formats like:
+    - '1 hour', '2 hours'
+    - '1 day', '3 days'
+    - '1 week', '2 weeks'
+    - '1 month', '6 months'
+    - '1 year', '3 years'
+    - '1 year 6 months'
+    """
+    duration = duration.lower()
+    total_days = 0
+    total_seconds = 0
+    
+    # Extract all number-unit pairs, stripping plural 's' from unit
+    pairs = re.findall(r'(\d+)\s*([a-z]+?)s?\b(?:\s+|$)', duration)
+    if not pairs:
+        raise ValueError(f"Could not parse time duration: {duration}")
+        
+    for value_str, unit in pairs:
+        value = int(value_str)
+        if unit in ('hour', 'hr', 'h'):
+            total_seconds += value * 3600
+        elif unit in ('day', 'd'):
+            total_days += value
+        elif unit in ('week', 'wk', 'w'):
+            total_days += value * 7
+        elif unit in ('month', 'mo', 'm'):
+            total_days += value * 30  # Approximate
+        elif unit in ('year', 'yr', 'y'):
+            total_days += value * 365  # Approximate
+        else:
+            raise ValueError(f"Unknown time unit: {unit}")
+            
+    return timedelta(days=total_days, seconds=total_seconds)
 
 
 def parse_github_url(url: str) -> Tuple[str, str]:
@@ -62,6 +101,11 @@ def analyze(
     clear_cache: bool = typer.Option(
         False, "--clear-cache", help="Clear cached repository data before analysis"
     ),
+    active_within: Optional[str] = typer.Option(
+        None,
+        "--active-within",
+        help="Only consider forks with activity within this time period (e.g. '1 hour', '2 days', '6 months', '1 year')",
+    ),
 ) -> None:
     """Analyze a GitHub repository's fork network and generate a summary report."""
     setup_logging(verbose)
@@ -81,6 +125,17 @@ def analyze(
             output = Path(f"{owner}-{repo}-forks.md")
             logger.info(f"No output file specified, using default: {output}")
 
+        # Parse active_within if specified
+        activity_threshold = None
+        if active_within:
+            try:
+                delta = parse_time_duration(active_within)
+                activity_threshold = datetime.now() - delta
+                logger.info(f"Only considering forks active since {activity_threshold}")
+            except ValueError as e:
+                logger.error(f"Invalid active-within format: {e}")
+                sys.exit(1)
+
         # Initialize report generator
         report_gen = ReportGenerator(llm_client)
 
@@ -95,7 +150,14 @@ def analyze(
         # Clone main repository
         git_repo = GitRepo(repo_info, config)
 
+        # Get and filter forks
         forks = github_client.get_forks(repo_info)
+        if activity_threshold:
+            forks = [
+                fork for fork in forks 
+                if datetime.fromisoformat(fork.last_updated) >= activity_threshold
+            ]
+            logger.info(f"Found {len(forks)} forks active within {active_within}")
 
         # Analyze forks and generate report
         report = report_gen.generate(repo_info, forks, git_repo)

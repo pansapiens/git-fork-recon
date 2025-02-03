@@ -3,5 +3,5 @@
 {% if summary %}
 ## Summary of Most Interesting Forks
 
-{{ summary }}
+{{ summary | linkify_commits }}
 {% endif %} 

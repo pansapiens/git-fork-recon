@@ -66,5 +66,13 @@ Options:
 - Specify custom output file: add `-o myreport.md` after the URL
 - Print to stdout instead of file: add `-o -` after the URL
 - Clear cached repository data: add `--clear-cache` after `git-fork-recon` to remove any previously cached data for this repository
+- Filter by recent activity: add `--active-within "time"` to only analyze forks with activity within the specified time period. Examples:
+  - `--active-within "1 hour"` - last hour
+  - `--active-within "2 days"` - last 2 days
+  - `--active-within "6 months"` - last 6 months
+  - `--active-within "1 year"` - last year
+  - `--active-within "3 years"` - last 3 years
+  - `--active-within "1 week"` - last week
+  - Can also combine units: `--active-within "1 year 6 months"` - last 1.5 years
 
 The tool caches cloned repositories in `~/.cache/git-fork-recon` to speed up subsequent runs. Use `--clear-cache` if you want to ensure a fresh clone of the repository and its forks.

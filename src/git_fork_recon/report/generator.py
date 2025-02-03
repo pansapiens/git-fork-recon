@@ -1,6 +1,7 @@
 from typing import List, Dict, Any
 import logging
 from pathlib import Path
+import re
 
 from jinja2 import Environment, PackageLoader, select_autoescape
 
@@ -10,6 +11,16 @@ from ..llm.client import LLMClient
 
 logger = logging.getLogger(__name__)
 
+def _linkify_commit_hashes(text: str, repo_url: str) -> str:
+    """Convert commit hashes in text to markdown links."""
+    # Match 7-40 character hex strings that look like commit hashes
+    pattern = r'\b([a-f0-9]{7,40})\b'
+    
+    def replace_hash(match):
+        commit_hash = match.group(1)
+        return f'[{commit_hash}]({repo_url}/commit/{commit_hash})'
+    
+    return re.sub(pattern, replace_hash, text)
 
 class ReportGenerator:
     def __init__(self, llm_client: LLMClient):
@@ -18,6 +29,8 @@ class ReportGenerator:
             loader=PackageLoader("git_fork_recon", "report/templates"),
             autoescape=select_autoescape(),
         )
+        # Add custom filter
+        self.env.filters['linkify_commits'] = lambda text: _linkify_commit_hashes(text, self.repo_url)
 
     def _generate_interesting_forks_summary(
         self, analyses: List[Dict[str, Any]]
@@ -49,8 +62,8 @@ class ReportGenerator:
         """Generate a Markdown report summarizing the forks."""
         template = self.env.get_template("master.md.jinja")
 
-        # Construct GitHub repository URL
-        repo_url = f"https://github.com/{repo_info.owner}/{repo_info.name}"
+        # Construct GitHub repository URL and store it for the filter
+        self.repo_url = f"https://github.com/{repo_info.owner}/{repo_info.name}"
 
         # Analyze each fork
         fork_analyses = []
@@ -83,6 +96,6 @@ class ReportGenerator:
         return template.render(
             repo=repo_info,
             analyses=fork_analyses,
-            repo_url=repo_url,
+            repo_url=self.repo_url,
             summary=interesting_summary,
         )

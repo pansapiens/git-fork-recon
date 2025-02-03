@@ -17,11 +17,18 @@ Found {{ analyses|length }} active forks with significant changes.
 - Commits ahead: {{ analysis.fork.ahead_commits }}
 - Commits behind: {{ analysis.fork.behind_commits }}
 - Stars: {{ analysis.fork.repo_info.stars }}
-- Has pull requests: {{ "Yes" if analysis.fork.has_pull_requests else "No" }}
+{% if analysis.fork.has_pull_requests %}
+- Pull Requests:
+{% for pr_url in analysis.fork.pull_request_urls %}
+  - [PR #{{ loop.index }}]({{ pr_url }})
+{% endfor %}
+{% else %}
+- Has pull requests: No
+{% endif %}
 - Last updated: {{ analysis.fork.last_updated }}
 
 **Summary of Changes:**
-{{ analysis.summary }}
+{{ analysis.summary | linkify_commits }}
 
 **Commits:**
 {% for commit in analysis.commits %}

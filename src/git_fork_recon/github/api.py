@@ -33,6 +33,7 @@ class ForkInfo:
     ahead_commits: int
     behind_commits: int
     has_pull_requests: bool
+    pull_request_urls: List[str]
     last_updated: str
 
 
@@ -123,6 +124,7 @@ class GithubClient:
                 pr_spec = f"{fork.owner.login}:{fork.default_branch}"
                 logger.debug(f"Checking PRs with head: {pr_spec}")
                 prs = repo.get_pulls(state="all", head=pr_spec)
+                pr_urls = [pr.html_url for pr in prs]
 
                 fork_info = ForkInfo(
                     repo_info=RepoInfo(
@@ -137,6 +139,7 @@ class GithubClient:
                     ahead_commits=comparison.ahead_by,
                     behind_commits=comparison.behind_by,
                     has_pull_requests=prs.totalCount > 0,
+                    pull_request_urls=pr_urls,
                     last_updated=fork.pushed_at.isoformat(),
                 )
 
