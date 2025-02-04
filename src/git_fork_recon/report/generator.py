@@ -116,7 +116,7 @@ class ReportGenerator:
         return template.render(
             repo=repo_info,
             analyses=fork_analyses,
-            interesting_forks_summary=interesting_forks_summary,
+            summary=interesting_forks_summary,
         )
 
     def generate(
