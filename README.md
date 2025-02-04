@@ -5,33 +5,14 @@ Analyse the network of forked git repositories, summarise changes and innovation
 ## Features
 
 - Intelligent analysis of fork networks using LLM-powered summaries
-- Filters and prioritizes forks based on:
-  - Number of commits ahead of parent
-  - Number of stars
-  - Recent activity
-  - Associated pull requests
-- Efficient local git analysis using remotes
+- Filters and prioritizes forks based on number of commits ahead of parent, starts, recent activity, PRs. Ignores forks with no changes.
+- Local caching of git repositories and forks as remotes
 - Detailed Markdown reports with:
   - Repository overview
   - Analysis of significant forks
   - Commit details and statistics
   - Links to GitHub commits and repositories
-
-## Configuration
-
-The following environment variables are required (can be provided via `.env` file):
-
-- `GITHUB_TOKEN`: GitHub API token for repository access
-- `OPENROUTER_API_KEY` or `OPENAI_API_KEY`: API key for LLM analysis
-- `CACHE_DIR` (optional): Directory for caching repository data (defaults to `~/.cache/git-fork-recon`)
-
-## Input
-
-- A starting Github repository
-
-## Output
-
-- A Markdown document summarising the changes and innovations from each of the the forked repositories, focusing on those with the most significant changes.
+  - Overall summary of changes and innovations highlighting the most interesting forks
 
 ## Installation
 
@@ -48,10 +29,56 @@ source .venv/bin/activate
 uv pip install -e .
 ```
 
+## Configuration
+
+The following environment variables are required (can be provided via `.env` file):
+
+- `GITHUB_TOKEN`: GitHub API token for (public read-only) repository metadata access
+- `OPENROUTER_API_KEY` or `OPENAI_API_KEY`: API key for an OpenAI-compatible LLM provider
+- `CACHE_DIR` (optional): Directory for caching repository data (defaults to `~/.cache/git-fork-recon`)
+
 ## Running
 
 ```bash
+# Activate the virtual environment if you haven't already
+# source .venv/bin/activate
+
 git-fork-recon analyze https://github.com/martinpacesa/BindCraft
+```
+
+Output is generated as `{username}-{repo}-forks.md` by default (use `-o` to specify a different file name, `-o -` to print to stdout).
+
+## Options
+
+```bash
+$ git-fork-recon analyze --help
+                                                                                                               
+ Usage: git-fork-recon [OPTIONS] REPO_URL                                                                               
+                                                                                                                        
+ Analyze a GitHub repository's fork network and generate a summary report.                                              
+                                                                                                                        
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ *    repo_url      TEXT  URL of the GitHub repository to analyze [default: None] [required]                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ --output              -o      PATH     Output file path (defaults to {repo_name}-forks.md) [default: None]           │
+│ --active-within               TEXT     Only consider forks with activity within this time period (e.g. '1 hour', '2  │
+│                                        days', '6 months', '1 year')                                                  │
+│                                        [default: None]                                                               │
+│ --env-file                    PATH     Path to .env file [default: None]                                             │
+│ --model                       TEXT     OpenRouter model to use (overrides MODEL env var) [default: None]             │
+│ --context-length              INTEGER  Override model context length (overrides CONTEXT_LENGTH env var)              │
+│                                        [default: None]                                                               │
+│ --api-base-url                TEXT     OpenAI-compatible API base URL [default: None]                                │
+│ --api-key-env-var             TEXT     Environment variable containing the API key [default: None]                   │
+│ --parallel            -p      INTEGER  Number of parallel requests [default: 5]                                      │
+│ --verbose             -v               Enable verbose logging                                                        │
+│ --clear-cache                          Clear cached repository data before analysis                                  │
+│ --install-completion                   Install completion for the current shell.                                     │
+│ --show-completion                      Show completion for the current shell, to copy it or customize the            │
+│                                        installation.                                                                 │
+│ --help                                 Show this message and exit.                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ## Running with Docker
@@ -74,26 +101,3 @@ docker run --rm \
   git-fork-recon \
   "https://github.com/martinpacesa/BindCraft"
 ```
-
-This will:
-- Run as your user to ensure correct file permissions
-- Mount the current directory to `/app` to use the latest code and output the report
-- Mount a cache directory to store cloned repositories between runs
-- Load environment variables from `.env`
-- Output a markdown report named `{username}-{repo}-forks.md`
-
-Options:
-- Use `-v` for verbose output: add it after `git-fork-recon`
-- Specify custom output file: add `-o myreport.md` after the URL
-- Print to stdout instead of file: add `-o -` after the URL
-- Clear cached repository data: add `--clear-cache` after `git-fork-recon` to remove any previously cached data for this repository
-- Filter by recent activity: add `--active-within "time"` to only analyze forks with activity within the specified time period. Examples:
-  - `--active-within "1 hour"` - last hour
-  - `--active-within "2 days"` - last 2 days
-  - `--active-within "6 months"` - last 6 months
-  - `--active-within "1 year"` - last year
-  - `--active-within "3 years"` - last 3 years
-  - `--active-within "1 week"` - last week
-  - Can also combine units: `--active-within "1 year 6 months"` - last 1.5 years
-
-The tool caches cloned repositories in `~/.cache/git-fork-recon` to speed up subsequent runs. Use `--clear-cache` if you want to ensure a fresh clone of the repository and its forks.
