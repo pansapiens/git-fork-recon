@@ -126,6 +126,11 @@ def main(
     clear_cache: bool = typer.Option(
         False, "--clear-cache", help="Clear cached repository data before analysis"
     ),
+    max_forks: Optional[int] = typer.Option(
+        None,
+        "--max-forks",
+        help="Maximum number of forks to analyze (default: no limit)",
+    ),
 ) -> None:
     """Analyze a GitHub repository's fork network and generate a summary report."""
     # Set up logging
@@ -165,6 +170,7 @@ def main(
             parallel=parallel,
             verbose=verbose,
             clear_cache=clear_cache,
+            max_forks=max_forks,
         )
 
     except Exception as e:

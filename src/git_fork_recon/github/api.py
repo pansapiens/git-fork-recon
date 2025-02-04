@@ -44,6 +44,26 @@ class GithubClient:
         self.client = Github(token)
         self.max_parallel = max_parallel
 
+    def _check_rate_limit(self):
+        """Check rate limit status and log warning if getting low."""
+        rate_limit = self.client.get_rate_limit()
+        remaining = rate_limit.core.remaining
+        total = rate_limit.core.limit
+        reset_time = rate_limit.core.reset.strftime("%Y-%m-%d %H:%M:%S UTC")
+
+        if remaining < 100:
+            logger.warning(
+                f"GitHub API rate limit low: {remaining}/{total} requests remaining. "
+                f"Resets at {reset_time}"
+            )
+        else:
+            logger.debug(
+                f"GitHub API rate limit status: {remaining}/{total} requests remaining. "
+                f"Resets at {reset_time}"
+            )
+
+        return remaining
+
     async def _process_fork(
         self, repo: Repository, fork: Repository
     ) -> Optional[ForkInfo]:
@@ -124,6 +144,17 @@ class GithubClient:
         self, repo: Repository, forks: List[Repository]
     ) -> List[ForkInfo]:
         """Process a batch of forks in parallel."""
+        # Check rate limit before processing batch
+        remaining = self._check_rate_limit()
+
+        # Estimate requests needed (4 API calls per fork)
+        requests_needed = len(forks) * 4
+        if remaining < requests_needed:
+            logger.warning(
+                f"Rate limit may be exceeded: need ~{requests_needed} requests but only {remaining} remaining. "
+                "Processing may be incomplete."
+            )
+
         tasks = []
         for fork in forks:
             tasks.append(self._process_fork(repo, fork))
@@ -131,32 +162,70 @@ class GithubClient:
         results = await asyncio.gather(*tasks)
         return [r for r in results if r is not None]
 
-    async def async_get_forks(self, repo_info: RepoInfo) -> List[ForkInfo]:
-        """Get information about all forks of a repository asynchronously."""
+    async def async_get_forks(
+        self, repo_info: RepoInfo, max_forks: Optional[int] = None
+    ) -> List[ForkInfo]:
+        """Get information about all forks of a repository asynchronously.
+
+        Args:
+            repo_info: Repository information
+            max_forks: Maximum number of forks to process after sorting by update time
+        """
         repo = self.client.get_repo(f"{repo_info.owner}/{repo_info.name}")
         forks = list(repo.get_forks())
         logger.info(
             f"Found {len(forks)} total forks for {repo_info.owner}/{repo_info.name}"
         )
 
+        # Sort forks by updated_at before processing
+        forks.sort(key=lambda x: x.updated_at, reverse=True)
+        logger.debug("Sorted forks by last update time")
+
+        # Limit number of forks to process if specified
+        if max_forks and len(forks) > max_forks:
+            logger.info(
+                f"Limiting processing to {max_forks} most recently updated forks (out of {len(forks)} total)"
+            )
+            forks = forks[:max_forks]
+        else:
+            logger.debug(f"Processing all {len(forks)} forks (no limit specified)")
+
+        # Check if we have enough rate limit for all forks
+        remaining = self._check_rate_limit()
+        total_requests_needed = len(forks) * 4  # Approximate requests per fork
+        if remaining < total_requests_needed:
+            logger.warning(
+                f"Not enough rate limit for all forks. Need ~{total_requests_needed} requests but only have {remaining}. "
+                "Will process as many as possible."
+            )
+
         # Process forks in batches
         processed_forks = []
         for i in range(0, len(forks), self.max_parallel):
+            if self._check_rate_limit() < self.max_parallel * 4:
+                logger.error(
+                    "Rate limit too low to process next batch. Stopping early."
+                )
+                break
+
             batch = forks[i : i + self.max_parallel]
             batch_results = await self._process_fork_batch(repo, batch)
             processed_forks.extend(batch_results)
 
         logger.info(
-            f"Found {len(processed_forks)} active forks with changes out of {len(forks)} total forks"
+            f"Found {len(processed_forks)} active forks with changes out of {len(forks)} processed forks"
         )
+        # Final sort by significance (ahead commits and stars)
         processed_forks.sort(
             key=lambda x: (x.ahead_commits, x.repo_info.stars), reverse=True
         )
         return processed_forks
 
-    def get_forks(self, repo_info: RepoInfo) -> List[ForkInfo]:
+    def get_forks(
+        self, repo_info: RepoInfo, max_forks: Optional[int] = None
+    ) -> List[ForkInfo]:
         """Synchronous wrapper for async_get_forks."""
-        return asyncio.run(self.async_get_forks(repo_info))
+        return asyncio.run(self.async_get_forks(repo_info, max_forks))
 
     def get_repository(self, repo_identifier: str) -> RepoInfo:
         """Get information about a GitHub repository.

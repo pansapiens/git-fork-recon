@@ -33,6 +33,7 @@ def analyze(
     verbose: bool = False,
     clear_cache: bool = False,
     activity_threshold: Optional[datetime] = None,
+    max_forks: Optional[int] = None,
 ) -> None:
     """Analyze forks of a GitHub repository."""
     # Load config and apply overrides
@@ -55,6 +56,7 @@ def analyze(
     logger.info(f"Using MODEL: {config.model}")
     if config.context_length is not None:
         logger.info(f"Using CONTEXT_LENGTH override: {config.context_length}")
+    logger.info(f"Maximum forks to analyze: {max_forks}")
 
     # Initialize clients with parallel option
     github_client = GithubClient(config.github_token, max_parallel=parallel)
@@ -80,14 +82,19 @@ def analyze(
     git_repo = GitRepo(repo_info, config)
 
     # Get and filter forks
-    forks = github_client.get_forks(repo_info)
+    forks = github_client.get_forks(repo_info, max_forks=max_forks)
+
+    # Apply activity threshold if specified
     if activity_threshold:
-        forks = [
+        active_forks = [
             fork
             for fork in forks
             if datetime.fromisoformat(fork.last_updated) >= activity_threshold
         ]
-        logger.info(f"Found {len(forks)} forks active since {activity_threshold}")
+        logger.info(
+            f"Found {len(active_forks)} forks active since {activity_threshold} out of {len(forks)} processed forks"
+        )
+        forks = active_forks
 
     # Generate report
     report_gen = ReportGenerator(llm_client)

@@ -52,7 +52,7 @@ Output is generated as `{username}-{repo}-forks.md` by default (use `-o` to spec
 
 ```bash
 $ git-fork-recon analyze --help
-                                                                                                               
+                                                                                                          
  Usage: git-fork-recon [OPTIONS] REPO_URL                                                                               
                                                                                                                         
  Analyze a GitHub repository's fork network and generate a summary report.                                              
@@ -74,6 +74,7 @@ $ git-fork-recon analyze --help
 │ --parallel            -p      INTEGER  Number of parallel requests [default: 5]                                      │
 │ --verbose             -v               Enable verbose logging                                                        │
 │ --clear-cache                          Clear cached repository data before analysis                                  │
+│ --max-forks                   INTEGER  Maximum number of forks to analyze after ranking [default: None]              │
 │ --install-completion                   Install completion for the current shell.                                     │
 │ --show-completion                      Show completion for the current shell, to copy it or customize the            │
 │                                        installation.                                                                 │
@@ -101,3 +102,7 @@ docker run --rm \
   git-fork-recon \
   "https://github.com/martinpacesa/BindCraft"
 ```
+
+## See also
+
+- [Useful forks](https://useful-forks.github.io/)
