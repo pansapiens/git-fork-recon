@@ -12,6 +12,10 @@ ARG GROUP_ID=1000
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     git \
+    pandoc \
+    texlive-latex-base \
+    texlive-fonts-recommended \
+    texlive-latex-extra \
     && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user with the provided IDs

@@ -131,6 +131,11 @@ def main(
         "--max-forks",
         help="Maximum number of forks to analyze (default: no limit)",
     ),
+    output_formats: Optional[str] = typer.Option(
+        None,
+        "--output-formats",
+        help="Comma-separated list of additional formats to generate (html,pdf)",
+    ),
 ) -> None:
     """Analyze a GitHub repository's fork network and generate a summary report."""
     # Set up logging
@@ -171,6 +176,7 @@ def main(
             verbose=verbose,
             clear_cache=clear_cache,
             max_forks=max_forks,
+            output_formats=output_formats,
         )
 
     except Exception as e:

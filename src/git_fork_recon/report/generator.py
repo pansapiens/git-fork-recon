@@ -1,4 +1,5 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
+import subprocess
 import logging
 from pathlib import Path
 import re
@@ -9,6 +10,7 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 from ..github.api import RepoInfo, ForkInfo
 from ..git.repo import GitRepo, CommitInfo
 from ..llm.client import LLMClient
+from .pandoc import PandocConverter
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,7 @@ def _linkify_commit_hashes(text: str, repo_url: str) -> str:
 class ReportGenerator:
     def __init__(self, llm_client: LLMClient):
         self.llm_client = llm_client
+        self.pandoc = PandocConverter()
         self.env = Environment(
             loader=PackageLoader("git_fork_recon", "report/templates"),
             autoescape=select_autoescape(),
@@ -118,6 +121,10 @@ class ReportGenerator:
             analyses=fork_analyses,
             summary=interesting_forks_summary,
         )
+
+    def convert_report(self, markdown_path: Path, formats: List[str]) -> None:
+        """Convert markdown report to additional formats using pandoc."""
+        self.pandoc.convert(markdown_path, formats)
 
     def generate(
         self, repo_info: RepoInfo, forks: List[ForkInfo], git_repo: GitRepo

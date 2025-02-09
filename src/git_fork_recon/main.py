@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 def analyze(
     repo_url: str,
     output: Optional[Path] = None,
+    output_formats: Optional[str] = None,
     active_within: Optional[str] = None,
     env_file: Optional[Path] = None,
     model: Optional[str] = None,
@@ -106,3 +107,7 @@ def analyze(
     else:
         output.write_text(report)
         logger.info(f"Report written to {output}")
+
+        # Handle additional output formats if specified
+        if output_formats:
+            report_gen.convert_report(output, output_formats.split(","))
