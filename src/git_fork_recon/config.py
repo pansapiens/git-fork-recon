@@ -22,7 +22,7 @@ class Config(BaseModel):
         description="Directory for caching repository data",
     )
     model: str = Field(
-        default="mistralai/mistral-small-24b-instruct-2501",
+        default="google/gemini-2.0-flash-001",
         description="OpenRouter model to use",
     )
     context_length: Optional[int] = Field(
@@ -75,7 +75,7 @@ def load_config(
                 api_key_source = "OPENAI_API_KEY"
 
     cache_dir = os.getenv("CACHE_DIR") or str(Path.home() / ".cache" / "git-fork-recon")
-    model = os.getenv("MODEL") or "mistralai/mistral-small-24b-instruct-2501"
+    model = os.getenv("MODEL") or "google/gemini-2.0-flash-001"
     context_length = os.getenv("CONTEXT_LENGTH")
     if context_length is not None:
         try:

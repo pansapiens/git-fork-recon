@@ -38,7 +38,7 @@ class LLMClient:
     def __init__(
         self,
         api_key: str,
-        model: str = "mistralai/mistral-small-24b-instruct-2501",
+        model: str = "google/gemini-2.0-flash-001",
         context_length: Optional[int] = None,
         api_base_url: str = DEFAULT_BASE_URL,
         max_parallel: int = 5,
@@ -264,6 +264,7 @@ class LLMClient:
                 - "ci" - adds or improves CI/CD
                 - "whitespace" - only whitespace changes, no significant code changes
                 
+                If no forks with notable changes are provided, say so, don't make stuff up. 
                 Be objective and technical, but make the summary accessible to developers.""",
             },
             {
