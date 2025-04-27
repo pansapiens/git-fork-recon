@@ -2,9 +2,33 @@
 name = "git-fork-recon"
 version = "0.1.0"
 description = "Analyse the network of forked git repositories"
-authors = []
+authors = [{ name = "Andrew Perry", email = "ajperry@pansapiens.com" }]
+license = { file = "LICENSE" }
 readme = "README.md"
 requires-python = ">=3.9"
+keywords = [
+    "git",
+    "github",
+    "fork",
+    "analysis",
+    "developer tools",
+    "cli",
+    "llm",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Version Control",
+    "Topic :: Utilities",
+    "Environment :: Console",
+    "Operating System :: OS Independent",
+]
 
 dependencies = [
     "PyGithub>=2.5.0",      # Github API client
@@ -19,6 +43,10 @@ dependencies = [
     "httpx>=0.28.0",        # HTTP client for API requests
     "tenacity>=8.0.0",      # Retry logic for API calls
 ]
+
+[project.urls]
+Homepage = "https://github.com/pansapiens/git-fork-recon"
+Repository = "https://github.com/pansapiens/git-fork-recon"
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0.0", "black>=24.0.0", "mypy>=1.8.0", "ruff>=0.2.0"]

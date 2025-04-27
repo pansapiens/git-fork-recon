@@ -14,7 +14,13 @@ Analyse the network of forked git repositories, summarise changes and innovation
   - Links to GitHub commits and repositories
   - Overall summary of changes and innovations highlighting the most interesting forks
 
-## Installation
+# Installation
+
+```bash
+pip install git-fork-recon
+```
+
+## Installation (development)
 
 Using `uv` (recommended):
 ```bash
