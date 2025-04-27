@@ -45,7 +45,9 @@ def load_config(
         print(f"Loading .env from {env_file}", file=sys.stderr)
         load_dotenv(env_file)
     else:
-        print("Using environment variables loaded at startup", file=sys.stderr)
+        # Try loading the default .env file if no specific path is given
+        print("Attempting to load default .env file", file=sys.stderr)
+        load_dotenv()
 
     github_token = os.getenv("GITHUB_TOKEN")
     openai_api_base_url = os.getenv(
