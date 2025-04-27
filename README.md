@@ -43,7 +43,7 @@ The following environment variables are required (can be provided via `.env` fil
 # Activate the virtual environment if you haven't already
 # source .venv/bin/activate
 
-git-fork-recon analyze https://github.com/martinpacesa/BindCraft
+git-fork-recon https://github.com/martinpacesa/BindCraft
 ```
 
 Output is generated as `{username}-{repo}-forks.md` by default (use `-o` to specify a different file name, `-o -` to print to stdout).
@@ -51,7 +51,7 @@ Output is generated as `{username}-{repo}-forks.md` by default (use `-o` to spec
 ## Options
 
 ```bash
-$ git-fork-recon analyze --help
+$ git-fork-recon --help
                                                                                                           
  Usage: git-fork-recon [OPTIONS] REPO_URL                                                                               
                                                                                                                         
