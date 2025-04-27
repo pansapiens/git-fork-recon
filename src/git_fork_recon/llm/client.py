@@ -38,7 +38,7 @@ class LLMClient:
     def __init__(
         self,
         api_key: str,
-        model: str = "google/gemini-2.0-flash-001",
+        model: str = "deepseek/deepseek-chat-v3-0324:free",
         context_length: Optional[int] = None,
         api_base_url: str = DEFAULT_BASE_URL,
         max_parallel: int = 5,

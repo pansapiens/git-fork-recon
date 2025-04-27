@@ -22,7 +22,7 @@ class Config(BaseModel):
         description="Directory for caching repository data",
     )
     model: str = Field(
-        default="google/gemini-2.0-flash-001",
+        default="deepseek/deepseek-chat-v3-0324:free",
         description="OpenRouter model to use",
     )
     context_length: Optional[int] = Field(
@@ -75,7 +75,7 @@ def load_config(
                 api_key_source = "OPENAI_API_KEY"
 
     cache_dir = os.getenv("CACHE_DIR") or str(Path.home() / ".cache" / "git-fork-recon")
-    model = os.getenv("MODEL") or "google/gemini-2.0-flash-001"
+    model = os.getenv("MODEL") or "deepseek/deepseek-chat-v3-0324:free"
     context_length = os.getenv("CONTEXT_LENGTH")
     if context_length is not None:
         try:
