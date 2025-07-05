@@ -82,7 +82,8 @@ def clear_repo_cache(repo_dir: Path) -> None:
 
 @app.command()
 def main(
-    repo_url: str = typer.Argument(..., help="URL of the GitHub repository to analyze"),
+    ctx: typer.Context,
+    repo_url: Optional[str] = typer.Argument(None, help="URL of the GitHub repository to analyze"),
     output: Optional[Path] = typer.Option(
         None,
         "-o",
@@ -138,6 +139,11 @@ def main(
     ),
 ) -> None:
     """Analyze a GitHub repository's fork network and generate a summary report."""
+    # If no repo_url is provided, print help and exit.
+    if repo_url is None:
+        console.print(ctx.get_help())
+        raise typer.Exit()
+
     # Set up logging
     setup_logging(verbose)
 
@@ -181,8 +187,9 @@ def main(
 
     except Exception as e:
         logger.error(f"Error analyzing repository: {e}", exc_info=True)
-        sys.exit(1)
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":
     app()
+
