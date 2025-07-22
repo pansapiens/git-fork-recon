@@ -6,7 +6,6 @@ from pathlib import Path
 from datetime import datetime, timezone
 import os
 import sys
-from dotenv import load_dotenv
 
 from .config import load_config
 from .github.api import GithubClient
@@ -14,8 +13,6 @@ from .git.repo import GitRepo
 from .llm.client import LLMClient
 from .report.generator import ReportGenerator
 
-# Load environment variables from .env file at startup
-load_dotenv()
 
 logger = logging.getLogger(__name__)
 

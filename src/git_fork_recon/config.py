@@ -1,10 +1,14 @@
 from pathlib import Path
 from typing import Optional
 import sys
+from platformdirs import user_cache_dir
+import logging
 
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 import os
+
+logger = logging.getLogger(__name__)
 
 
 class Config(BaseModel):
@@ -36,19 +40,20 @@ def load_config(
     api_key_env_var: Optional[str] = None,
 ) -> Config:
     """Load configuration from environment variables and .env file."""
-    print("Loading config...", file=sys.stderr)
-    print(f"Current working directory: {os.getcwd()}", file=sys.stderr)
-    print(f"Looking for .env file: {env_file or '.env'}", file=sys.stderr)
+    logger.debug("Loading config...")
+    logger.debug(f"Current working directory: {os.getcwd()}")
+    logger.debug(f"Looking for .env file: {env_file or '.env'}")
 
-    # Only load from env_file if explicitly provided, since we load .env at startup
+    # Only load from env_file if explicitly provided
     if env_file:
-        print(f"Loading .env from {env_file}", file=sys.stderr)
-        load_dotenv(env_file)
+        logger.info(f"Loading .env from {env_file}")
+        load_dotenv(env_file, override=True)
     else:
-        # Try loading the default .env file if no specific path is given
-        print("Attempting to load default .env file", file=sys.stderr)
-        dotenv_loaded = load_dotenv()
-        print(f"load_dotenv() result: {dotenv_loaded}", file=sys.stderr)
+        # Try loading the default .env file from the current working directory
+        logger.debug("Attempting to load default .env file from current directory")
+        dotenv_path = Path(os.getcwd()) / ".env"
+        dotenv_loaded = load_dotenv(dotenv_path=dotenv_path, override=True)
+        logger.debug(f"load_dotenv() result: {dotenv_loaded} from path: {dotenv_path}")
 
     github_token = os.getenv("GITHUB_TOKEN")
     openai_api_base_url = os.getenv(
@@ -77,26 +82,22 @@ def load_config(
             if openai_api_key:
                 api_key_source = "OPENAI_API_KEY"
 
-    cache_dir = os.getenv("CACHE_DIR") or str(Path.home() / ".cache" / "git-fork-recon")
+    cache_dir = os.getenv("CACHE_DIR") or user_cache_dir("git-fork-recon")
     model = os.getenv("MODEL") or "deepseek/deepseek-chat-v3-0324:free"
     context_length = os.getenv("CONTEXT_LENGTH")
     if context_length is not None:
         try:
             context_length = int(context_length)
         except ValueError:
-            print(
-                f"Error: CONTEXT_LENGTH must be an integer, got {context_length}",
-                file=sys.stderr,
-            )
+            logger.error(f"CONTEXT_LENGTH must be an integer, got {context_length}")
             sys.exit(1)
 
     if not github_token:
-        print("Error: GITHUB_TOKEN environment variable is required", file=sys.stderr)
+        logger.error("GITHUB_TOKEN environment variable is required")
         sys.exit(1)
     if not openai_api_key:
-        print(
-            "Error: OPENAI_API_KEY or OPENROUTER_API_KEY environment variable is required",
-            file=sys.stderr,
+        logger.error(
+            "OPENAI_API_KEY or OPENROUTER_API_KEY environment variable is required"
         )
         sys.exit(1)
 
