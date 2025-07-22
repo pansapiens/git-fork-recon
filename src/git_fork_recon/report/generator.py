@@ -110,10 +110,14 @@ class ReportGenerator:
             batch_results = await self._analyze_fork_batch(batch, git_repo)
             fork_analyses.extend(batch_results)
 
-        # Generate high-level summary
-        interesting_forks_summary = await self._generate_interesting_forks_summary(
-            fork_analyses
-        )
+        # If no forks to analyze, set a fixed summary
+        if not fork_analyses:
+            interesting_forks_summary = "No forks with notable changes were found."
+        else:
+            # Generate high-level summary
+            interesting_forks_summary = await self._generate_interesting_forks_summary(
+                fork_analyses
+            )
 
         # Render template
         return template.render(
