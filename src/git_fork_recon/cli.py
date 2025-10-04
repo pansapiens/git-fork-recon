@@ -83,7 +83,9 @@ def clear_repo_cache(repo_dir: Path) -> None:
 @app.command()
 def main(
     ctx: typer.Context,
-    repo_url: Optional[str] = typer.Argument(None, help="URL of the GitHub repository to analyze"),
+    repo_url: Optional[str] = typer.Argument(
+        None, help="URL of the GitHub repository to analyze"
+    ),
     output: Optional[Path] = typer.Option(
         None,
         "-o",
@@ -183,6 +185,7 @@ def main(
             clear_cache=clear_cache,
             max_forks=max_forks,
             output_formats=output_formats,
+            activity_threshold=activity_threshold,
         )
 
     except Exception as e:
@@ -192,4 +195,3 @@ def main(
 
 if __name__ == "__main__":
     app()
-

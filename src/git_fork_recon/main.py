@@ -92,11 +92,13 @@ def analyze(
         logger.info(
             f"Found {len(active_forks)} forks active since {activity_threshold} out of {len(forks)} processed forks"
         )
-        forks = active_forks
+        forks_to_analyze = active_forks
+    else:
+        forks_to_analyze = forks
 
     # Generate report
     report_gen = ReportGenerator(llm_client)
-    report = report_gen.generate(repo_info, forks, git_repo)
+    report = report_gen.generate(repo_info, forks_to_analyze, git_repo)
 
     # Write report to file or stdout
     if output is None or str(output) == "-":
