@@ -22,7 +22,7 @@ class Config(BaseModel):
         description="OpenAI-compatible API base URL",
     )
     cache_dir: Path = Field(
-        default=Path.home() / ".cache" / "git-fork-recon",
+        default=Path(".cache"),
         description="Directory for caching repository data",
     )
     model: str = Field(
@@ -82,7 +82,7 @@ def load_config(
             if openai_api_key:
                 api_key_source = "OPENAI_API_KEY"
 
-    cache_dir = os.getenv("CACHE_DIR") or user_cache_dir("git-fork-recon")
+    cache_dir = os.getenv("REPO_CACHE_DIR") or user_cache_dir("git-fork-recon/repos")
     model = os.getenv("MODEL") or "deepseek/deepseek-chat-v3-0324:free"
     context_length = os.getenv("CONTEXT_LENGTH")
     if context_length is not None:

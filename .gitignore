@@ -9,6 +9,7 @@ dist/
 .aider*
 .cursor/
 .cursorignore
+.crush/
 
 examples/
 BUILD_PYPI.md

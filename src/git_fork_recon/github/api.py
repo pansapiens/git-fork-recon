@@ -46,23 +46,34 @@ class GithubClient:
 
     def _check_rate_limit(self):
         """Check rate limit status and log warning if getting low."""
-        rate_limit = self.client.get_rate_limit()
-        remaining = rate_limit.core.remaining
-        total = rate_limit.core.limit
-        reset_time = rate_limit.core.reset.strftime("%Y-%m-%d %H:%M:%S UTC")
+        try:
+            rate_limit = self.client.get_rate_limit()
 
-        if remaining < 100:
-            logger.warning(
-                f"GitHub API rate limit low: {remaining}/{total} requests remaining. "
-                f"Resets at {reset_time}"
-            )
-        else:
-            logger.debug(
-                f"GitHub API rate limit status: {remaining}/{total} requests remaining. "
-                f"Resets at {reset_time}"
-            )
+            # PyGithub v2.8.1+ uses resources.core structure
+            core = rate_limit.resources.core
+            remaining = core.remaining
+            total = core.limit
+            reset_time = core.reset
 
-        return remaining
+            reset_time_str = reset_time.strftime("%Y-%m-%d %H:%M:%S UTC")
+
+            if remaining < 100:
+                logger.warning(
+                    f"GitHub API rate limit low: {remaining}/{total} requests remaining. "
+                    f"Resets at {reset_time_str}"
+                )
+            else:
+                logger.debug(
+                    f"GitHub API rate limit status: {remaining}/{total} requests remaining. "
+                    f"Resets at {reset_time_str}"
+                )
+
+            return remaining
+
+        except Exception as e:
+            logger.warning(f"Failed to check rate limit: {e}")
+            # Return a conservative estimate if we can't check
+            return 100
 
     async def _process_fork(
         self, repo: Repository, fork: Repository

@@ -30,7 +30,7 @@ class GitRepo:
     def __init__(self, repo_info: RepoInfo, config: Config):
         self.repo_info = repo_info
         self.cache_dir = config.cache_dir
-        self.repo_dir = self.cache_dir / f"{repo_info.owner}-{repo_info.name}"
+        self.repo_dir = self.cache_dir / repo_info.owner / repo_info.name
         self._ensure_repo()
 
     def _ensure_repo(self) -> None:

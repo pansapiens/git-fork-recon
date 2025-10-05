@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 import re
 import asyncio
+from datetime import datetime
 
 from jinja2 import Environment, PackageLoader, select_autoescape
 
@@ -124,6 +125,7 @@ class ReportGenerator:
             repo=repo_info,
             analyses=fork_analyses,
             summary=interesting_forks_summary,
+            generated_date=datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC"),
         )
 
     def convert_report(self, markdown_path: Path, formats: List[str]) -> None:
