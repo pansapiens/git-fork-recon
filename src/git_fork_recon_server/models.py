@@ -8,6 +8,7 @@ from enum import Enum
 
 class FormatEnum(str, Enum):
     """Supported output formats."""
+
     markdown = "markdown"
     json = "json"
     html = "html"
@@ -16,6 +17,7 @@ class FormatEnum(str, Enum):
 
 class AnalysisRequest(BaseModel):
     """Request model for repository analysis."""
+
     repo_url: HttpUrl = Field(..., description="GitHub repository URL to analyze")
     model: Optional[str] = Field(None, description="LLM model to use for analysis")
     nocache: bool = Field(False, description="Skip cache and force re-analysis")
@@ -25,6 +27,7 @@ class AnalysisRequest(BaseModel):
 
 class AnalysisStatus(str, Enum):
     """Analysis status types."""
+
     generating = "generating"
     available = "available"
     error = "error"
@@ -32,15 +35,21 @@ class AnalysisStatus(str, Enum):
 
 class AnalysisResponse(BaseModel):
     """Response model for analysis requests."""
+
     status: AnalysisStatus = Field(..., description="Current status of the analysis")
-    retry_after: Optional[datetime] = Field(None, description="When to retry (if generating)")
+    retry_after: Optional[datetime] = Field(
+        None, description="When to retry (if generating)"
+    )
     link: Optional[str] = Field(None, description="Link to the report (if available)")
-    last_updated: Optional[datetime] = Field(None, description="When the report was last updated")
+    last_updated: Optional[datetime] = Field(
+        None, description="When the report was last updated"
+    )
     error: Optional[str] = Field(None, description="Error message (if status is error)")
 
 
 class HealthResponse(BaseModel):
     """Response model for health checks."""
+
     status: str = Field(..., description="Health status")
     timestamp: datetime = Field(..., description="Check timestamp")
     version: str = Field(..., description="Service version")
@@ -49,10 +58,20 @@ class HealthResponse(BaseModel):
 
 class CacheMetadata(BaseModel):
     """Metadata for cached analysis results."""
+
     generated_date: datetime = Field(..., description="When the analysis was generated")
     model: str = Field(..., description="Model used for analysis")
     repo_url: str = Field(..., description="Repository URL that was analyzed")
     format: FormatEnum = Field(..., description="Output format")
-    github_token_available: bool = Field(..., description="Whether GitHub token was available")
+    github_token_available: bool = Field(
+        ..., description="Whether GitHub token was available"
+    )
     repo_owner: str = Field(..., description="Repository owner")
     repo_name: str = Field(..., description="Repository name")
+
+
+class ConfigResponse(BaseModel):
+    """Response model for configuration information."""
+
+    allowed_models: List[str] = Field(..., description="List of allowed LLM models")
+    default_model: str = Field(..., description="Default LLM model")

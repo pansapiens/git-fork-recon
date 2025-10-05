@@ -173,6 +173,21 @@ class CacheManager:
             logger.error(f"Error loading cached result: {e}")
             return None
 
+    def get_metadata(self, repo_owner: str, repo_name: str, timestamp: str) -> Optional[CacheMetadata]:
+        """Get metadata for a specific report version."""
+        version_dir = self.get_version_cache_dir(repo_owner, repo_name, timestamp)
+        metadata_file = version_dir / "metadata.json"
+
+        if not metadata_file.exists():
+            return None
+
+        try:
+            metadata = CacheMetadata.model_validate_json(metadata_file.read_text())
+            return metadata
+        except Exception as e:
+            logger.error(f"Error loading metadata: {e}")
+            return None
+
     def get_cache_info(self, repo_owner: str, repo_name: str) -> Dict[str, Any]:
         """Get information about cached versions."""
         repo_cache = self.get_repo_cache_dir(repo_owner, repo_name)

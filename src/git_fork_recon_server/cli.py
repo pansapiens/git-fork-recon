@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.logging import RichHandler
 from dotenv import load_dotenv
 
-from .app import app as fastapi_app
+from .app import create_app
 
 app = typer.Typer()
 console = Console()
@@ -106,11 +106,12 @@ def main(
 
     # Start the server
     uvicorn.run(
-        "git_fork_recon_server.app:app",
+        "git_fork_recon_server.app:create_app",
         host=host,
         port=port,
         reload=reload,
         log_level=log_level,
+        factory=True,
     )
 
 

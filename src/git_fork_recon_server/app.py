@@ -8,14 +8,22 @@ import os
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
-from .models import AnalysisRequest, AnalysisResponse, HealthResponse
+from .models import AnalysisRequest, AnalysisResponse, HealthResponse, ConfigResponse
 from .cache import CacheManager
 from .analysis import AnalysisManager
 from .auth import AuthMiddleware
 
 
 logger = logging.getLogger(__name__)
+
+
+def _format_to_extension(format_value: str) -> str:
+    """Convert format value to file extension."""
+    if format_value == "markdown":
+        return "md"
+    return format_value
 
 
 def create_app() -> FastAPI:
@@ -54,7 +62,7 @@ def create_app() -> FastAPI:
                 "auth": {"disabled": os.getenv("DISABLE_AUTH", "0") == "1"},
                 "concurrent_jobs": analysis_manager.get_job_count(),
                 "max_concurrent": analysis_manager.max_concurrent,
-            }
+            },
         )
 
     @app.get("/health/ready")
@@ -73,7 +81,19 @@ def create_app() -> FastAPI:
                 "concurrent_jobs": analysis_manager.get_job_count(),
                 "max_concurrent": analysis_manager.max_concurrent,
                 "can_accept_new_jobs": can_accept,
-            }
+            },
+        )
+
+    @app.get("/config", response_model=ConfigResponse)
+    async def get_config() -> ConfigResponse:
+        """Get server configuration information."""
+        return ConfigResponse(
+            allowed_models=(
+                list(analysis_manager.allowed_models)
+                if analysis_manager.allowed_models
+                else []
+            ),
+            default_model=os.getenv("MODEL", "deepseek/deepseek-chat-v3.1:free"),
         )
 
     @app.post("/analyze", response_model=AnalysisResponse)
@@ -105,10 +125,7 @@ def create_app() -> FastAPI:
             }
             task_kwargs = {k: v for k, v in task_kwargs.items() if v is not None}
 
-            background_tasks.add_task(
-                analysis_manager.run_analysis_task,
-                **task_kwargs
-            )
+            background_tasks.add_task(analysis_manager.run_analysis_task, **task_kwargs)
 
         return response
 
@@ -131,25 +148,15 @@ def create_app() -> FastAPI:
 
         api_format = url_to_api_format.get(format)
         if api_format is None:
-            raise HTTPException(status_code=400, detail=f"Invalid format. Allowed: {list(url_to_api_format.keys())}")
-
-        # Check if this analysis is currently running
-        repo_url = f"https://github.com/{owner}/{repo}"
-        model_part = "default"  # Since we don't have model info in GET request
-        job_key = f"{repo_url}::{model_part}"
-        if job_key in analysis_manager.active_jobs:
-            retry_after = analysis_manager.get_retry_after()
-            return JSONResponse(
-                status_code=202,
-                content={
-                    "status": "generating",
-                    "retry-after": retry_after.strftime("%a, %d %b %Y %H:%M:%S GMT")
-                },
-                headers={"Retry-After": retry_after.strftime("%a, %d %b %Y %H:%M:%S GMT")}
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid format. Allowed: {list(url_to_api_format.keys())}",
             )
 
         # Get cached result
-        result = cache_manager.get_result(owner, repo, timestamp, requested_format=api_format)
+        result = cache_manager.get_result(
+            owner, repo, timestamp, requested_format=api_format
+        )
         if not result:
             raise HTTPException(status_code=404, detail="Report not found")
 
@@ -159,7 +166,9 @@ def create_app() -> FastAPI:
         return Response(
             content=content,
             media_type=_get_media_type(api_format),
-            headers={"Content-Disposition": f"attachment; filename={owner}-{repo}-forks.{format}"}
+            headers={
+                "Content-Disposition": f"attachment; filename={owner}-{repo}-forks.{format}"
+            },
         )
 
     @app.get("/report/{owner}/{repo}/latest/report.{format}")
@@ -180,30 +189,22 @@ def create_app() -> FastAPI:
 
         api_format = url_to_api_format.get(format)
         if api_format is None:
-            raise HTTPException(status_code=400, detail=f"Invalid format. Allowed: {list(url_to_api_format.keys())}")
-
-        # Check if this analysis is currently running
-        repo_url = f"https://github.com/{owner}/{repo}"
-        model_part = "default"  # Since we don't have model info in GET request
-        job_key = f"{repo_url}::{model_part}"
-        if job_key in analysis_manager.active_jobs:
-            retry_after = analysis_manager.get_retry_after()
-            return JSONResponse(
-                status_code=202,
-                content={
-                    "status": "generating",
-                    "retry-after": retry_after.strftime("%a, %d %b %Y %H:%M:%S GMT")
-                },
-                headers={"Retry-After": retry_after.strftime("%a, %d %b %Y %H:%M:%S GMT")}
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid format. Allowed: {list(url_to_api_format.keys())}",
             )
 
         # Get latest version
         latest = cache_manager.get_latest_version(owner, repo)
         if not latest:
-            raise HTTPException(status_code=404, detail="No reports found for this repository")
+            raise HTTPException(
+                status_code=404, detail="No reports found for this repository"
+            )
 
         # Get cached result
-        result = cache_manager.get_result(owner, repo, latest, requested_format=api_format)
+        result = cache_manager.get_result(
+            owner, repo, latest, requested_format=api_format
+        )
         if not result:
             raise HTTPException(status_code=404, detail="Report not found")
 
@@ -213,8 +214,114 @@ def create_app() -> FastAPI:
         return Response(
             content=content,
             media_type=_get_media_type(api_format),
-            headers={"Content-Disposition": f"attachment; filename={owner}-{repo}-forks.{format}"}
+            headers={
+                "Content-Disposition": f"attachment; filename={owner}-{repo}-forks.{format}"
+            },
         )
+
+    @app.get("/metadata/{owner}/{repo}/{timestamp}")
+    async def get_metadata(
+        owner: str,
+        repo: str,
+        timestamp: str,
+    ):
+        """Get metadata for a specific report version."""
+        metadata = cache_manager.get_metadata(owner, repo, timestamp)
+        if not metadata:
+            raise HTTPException(status_code=404, detail="Metadata not found")
+
+        return metadata
+
+    @app.get("/metadata/{owner}/{repo}/latest")
+    async def get_latest_metadata(
+        owner: str,
+        repo: str,
+    ):
+        """Get metadata for the latest report."""
+        latest = cache_manager.get_latest_version(owner, repo)
+        if not latest:
+            raise HTTPException(
+                status_code=404, detail="No reports found for this repository"
+            )
+
+        metadata = cache_manager.get_metadata(owner, repo, latest)
+        if not metadata:
+            raise HTTPException(status_code=404, detail="Metadata not found")
+
+        return metadata
+
+    @app.get("/report/{owner}/{repo}/{timestamp}/status")
+    async def get_report_status(
+        owner: str,
+        repo: str,
+        timestamp: str,
+    ):
+        """Get status for a specific report version."""
+        # Check if this analysis is currently running for any model
+        repo_url = f"https://github.com/{owner}/{repo}"
+
+        # Check if there are any active jobs for this repository (regardless of model)
+        active_repo_jobs = [
+            key
+            for key in analysis_manager.active_jobs.keys()
+            if key.startswith(f"{repo_url}::")
+        ]
+        if active_repo_jobs:
+            retry_after = analysis_manager.get_retry_after()
+            return {
+                "status": "generating",
+                "retry-after": retry_after.strftime("%a, %d %b %Y %H:%M:%S GMT"),
+            }
+
+        # Check if the specific version exists
+        metadata = cache_manager.get_metadata(owner, repo, timestamp)
+        if metadata:
+            return {
+                "status": "available",
+                "link": f"/report/{owner}/{repo}/{timestamp}/report.{_format_to_extension(metadata.format.value)}",
+                "generated_date": metadata.generated_date.isoformat(),
+                "model": metadata.model,
+            }
+        else:
+            return {"status": "not_found"}
+
+    @app.get("/report/{owner}/{repo}/latest/status")
+    async def get_latest_report_status(
+        owner: str,
+        repo: str,
+    ):
+        """Get status for the latest report."""
+        # Check if this analysis is currently running for any model
+        repo_url = f"https://github.com/{owner}/{repo}"
+
+        # Check if there are any active jobs for this repository (regardless of model)
+        active_repo_jobs = [
+            key
+            for key in analysis_manager.active_jobs.keys()
+            if key.startswith(f"{repo_url}::")
+        ]
+        if active_repo_jobs:
+            retry_after = analysis_manager.get_retry_after()
+            return {
+                "status": "generating",
+                "retry-after": retry_after.strftime("%a, %d %b %Y %H:%M:%S GMT"),
+            }
+
+        # Check if any version exists
+        latest = cache_manager.get_latest_version(owner, repo)
+        if not latest:
+            return {"status": "not_found"}
+
+        metadata = cache_manager.get_metadata(owner, repo, latest)
+        if metadata:
+            return {
+                "status": "available",
+                "link": f"/report/{owner}/{repo}/latest/report.{_format_to_extension(metadata.format.value)}",
+                "generated_date": metadata.generated_date.isoformat(),
+                "model": metadata.model,
+            }
+        else:
+            return {"status": "not_found"}
 
     def _get_media_type(format: str) -> str:
         """Get the appropriate media type for a format."""
@@ -226,8 +333,45 @@ def create_app() -> FastAPI:
         }
         return media_types.get(format, "text/plain")
 
+    # Mount static files and add UI endpoint if not disabled
+    if os.getenv("DISABLE_UI", "0").lower() not in ("1", "true", "yes"):
+        # Mount static files
+        static_dir = os.path.join(os.path.dirname(__file__), "static")
+        if os.path.exists(static_dir):
+            app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+        @app.get("/ui")
+        async def serve_ui():
+            """Serve the web UI."""
+            return FileResponse(os.path.join(static_dir, "index.html"))
+
+        # Add redirect for GET / to /ui (unless it's an API request)
+        @app.get("/")
+        async def root_redirect(request: Request):
+            """Redirect root to UI for browser requests."""
+            # Check if the request accepts HTML (browser request)
+            accept_header = request.headers.get("accept", "")
+            if "text/html" in accept_header or "*/*" in accept_header:
+                from fastapi.responses import RedirectResponse
+
+                return RedirectResponse(url="/ui", status_code=302)
+
+            # For API requests, return JSON response
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "message": "Git Fork Recon Server",
+                    "version": "0.1.0",
+                    "endpoints": {
+                        "analyze": "/analyze",
+                        "config": "/config",
+                        "reports": "/report/{owner}/{repo}/{timestamp}/report.{format}",
+                        "latest_report": "/report/{owner}/{repo}/latest/report.{format}",
+                        "health": "/health",
+                        "ready": "/health/ready",
+                        "ui": "/ui",
+                    },
+                },
+            )
+
     return app
-
-
-# Create the application instance
-app = create_app()

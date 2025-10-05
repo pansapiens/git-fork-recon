@@ -98,6 +98,7 @@ For the REST API server, additional environment variables are available:
 - `DISABLE_AUTH`: Set to `1` to disable authentication (default: enabled)
 - `AUTH_BEARER_TOKEN`: Bearer token for API authentication
 - `PARALLEL_TASKS`: Maximum concurrent analysis tasks (default: 2)
+- `DISABLE_UI`: Set to `1` to disable the web UI at `/ui` endpoint (default: enabled)
 
 ## Running
 
@@ -123,13 +124,20 @@ git-fork-recon-server --host 127.0.0.1 --port 8000
 uv run git-fork-recon-server --host 127.0.0.1 --port 8000
 ```
 
+Go to http://localhost:8000/ui to see the web UI.
+
 ### API Endpoints
 
 - `POST /analyze` - Start repository analysis
 - `GET /report/{owner}/{repo}/{timestamp}/report.{format}` - Get cached report
 - `GET /report/{owner}/{repo}/latest/report.{format}` - Get latest cached report
+- `GET /report/{owner}/{repo}/{timestamp}/status` - Get status for specific report version
+- `GET /report/{owner}/{repo}/latest/status` - Get status for latest report
+- `GET /metadata/{owner}/{repo}/{timestamp}` - Get metadata for specific report version
+- `GET /metadata/{owner}/{repo}/latest` - Get metadata for latest report
 - `GET /health` - Health check endpoint
 - `GET /health/ready` - Readiness check endpoint
+- `GET /ui` - Web UI for repository analysis (unless disabled with `DISABLE_UI=1`)
 
 ### Example Request
 
