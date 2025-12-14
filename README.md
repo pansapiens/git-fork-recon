@@ -27,9 +27,6 @@ pip install git-fork-recon
 
 # For server functionality
 pip install 'git-fork-recon[server]'
-
-# For MCP server functionality (future)
-pip install 'git-fork-recon[mcp]'
 ```
 
 ## Installation (development)
@@ -49,9 +46,6 @@ uv pip install -e .
 # Install server dependencies
 uv pip install -e '.[server]'
 
-# Install MCP server dependencies (future)
-uv pip install -e '.[mcp]'
-
 # Install development dependencies
 uv pip install -e '.[dev]'
 ```
@@ -66,9 +60,6 @@ uv sync
 
 # Sync with server dependencies
 uv sync --extra server
-
-# Sync with MCP server dependencies (future)
-uv sync --extra mcp
 
 # Sync with development dependencies
 uv sync --extra dev

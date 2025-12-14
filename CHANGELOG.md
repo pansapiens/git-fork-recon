@@ -8,31 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- REST API server with FastAPI for programmatic access
-- Authentication middleware with Bearer token support
-- Unified two-tier caching system with REPO_CACHE_DIR and REPORT_CACHE_DIR
-- Versioned report caching with filesystem storage and metadata tracking
-- Health check endpoints (/health and /health/ready)
-- Concurrent task limiting via PARALLEL_TASKS environment variable
+- `git-fork-recon-server` - local web frontend with REST API
+  - Authentication middleware with Bearer token support
+  - Versioned report caching and metadata tracking
+  - Asynchronous background task management and concurrency limiting via PARALLEL_TASKS environment variable
+  - Health check endpoints (/health and /health/ready)
 - Support for multiple output formats (markdown, json, html, pdf)
-- Background task management for asynchronous analysis
-- Git-fork-recon-server CLI command with configurable host/port
-- AnalysisResult class for structured data return
-- Module refactoring for better importability
-- Generated date variable in report templates
+- Include generated date variable in report templates
 - Model validation against ALLOWED_MODELS environment variable
-- MCP server optional dependency (future implementation)
 - Cross-platform cache directories using platformdirs
 - uv sync instructions for modern dependency management
 
 ### Changed
 - Refactored main.py to separate analysis logic from output generation
-- Updated build configuration to include server module
 - Enhanced error handling and status tracking
 - Updated PyGithub to v2.8.1+ for rate limit API compatibility
-- Fixed rate limit checking to use resources.core structure
 - Migrated from single CACHE_DIR to separate REPO_CACHE_DIR and REPORT_CACHE_DIR
 - Updated repository cache structure from dashes to {owner}/{repo} format
+
+### Fixed
+- Fixed openrouter dependency version (was pinned to non-existant version).
 
 ## [0.1.3]
 
