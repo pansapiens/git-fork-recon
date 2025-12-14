@@ -31,7 +31,7 @@ class AnalysisResult:
 
 def analyze_forks(
     repo_url: str,
-    env_file: Optional[Path] = None,
+    config_file: Optional[Path] = None,
     model: Optional[str] = None,
     context_length: Optional[int] = None,
     api_base_url: Optional[str] = None,
@@ -44,7 +44,7 @@ def analyze_forks(
 ) -> AnalysisResult:
     """Analyze forks of a GitHub repository and return results."""
     # Load config and apply overrides
-    config = load_config(env_file, api_key_env_var=api_key_env_var)
+    config = load_config(config_file, api_key_env_var=api_key_env_var)
 
     # Override config with command line options if provided
     if model is not None:
@@ -52,7 +52,7 @@ def analyze_forks(
     if context_length is not None:
         config.context_length = context_length
     if api_base_url is not None:
-        config.openai_api_base_url = api_base_url
+        config.openai_base_url = api_base_url
     if github_token is not None:
         config.github_token = github_token
 
@@ -62,7 +62,7 @@ def analyze_forks(
         config.openai_api_key,
         model=config.model,
         context_length=config.context_length,
-        api_base_url=config.openai_api_base_url,
+        api_base_url=config.openai_base_url,
         max_parallel=parallel,
     )
 
@@ -70,8 +70,8 @@ def analyze_forks(
     repo_info = github_client.get_repository(repo_url)
 
     # Clear cache only if requested
-    if clear_cache and config.cache_dir:
-        repo_cache = config.cache_dir / repo_info.name
+    if clear_cache and config.cache_repo:
+        repo_cache = config.cache_repo / repo_info.name
         if repo_cache.exists():
             logger.info(f"Clearing cache for {repo_cache}")
             repo_cache.unlink(missing_ok=True)
@@ -108,7 +108,7 @@ def analyze(
     output: Optional[Path] = None,
     output_formats: Optional[str] = None,
     active_within: Optional[str] = None,
-    env_file: Optional[Path] = None,
+    config_file: Optional[Path] = None,
     model: Optional[str] = None,
     context_length: Optional[int] = None,
     api_base_url: Optional[str] = None,
@@ -121,7 +121,7 @@ def analyze(
 ) -> None:
     """Analyze forks of a GitHub repository (CLI interface)."""
     # Load config and apply overrides
-    config = load_config(env_file, api_key_env_var=api_key_env_var)
+    config = load_config(config_file, api_key_env_var=api_key_env_var)
 
     # Override config with command line options if provided
     if model is not None:
@@ -129,14 +129,14 @@ def analyze(
     if context_length is not None:
         config.context_length = context_length
     if api_base_url is not None:
-        config.openai_api_base_url = api_base_url
+        config.openai_base_url = api_base_url
 
     # Log final configuration
     logger.info(f"Found GITHUB_TOKEN: {'yes' if config.github_token else 'no'}")
     logger.info(f"Using API key from: {config.api_key_source}")
     logger.info(f"Found API key: {'yes' if config.openai_api_key else 'no'}")
-    logger.info(f"Using API base URL: {config.openai_api_base_url}")
-    logger.info(f"Using CACHE_DIR: {config.cache_dir}")
+    logger.info(f"Using API base URL: {config.openai_base_url}")
+    logger.info(f"Using CACHE_REPO: {config.cache_repo}")
     logger.info(f"Using MODEL: {config.model}")
     if config.context_length is not None:
         logger.info(f"Using CONTEXT_LENGTH override: {config.context_length}")
@@ -145,7 +145,7 @@ def analyze(
     # Perform analysis
     result = analyze_forks(
         repo_url=repo_url,
-        env_file=env_file,
+        config_file=config_file,
         model=model,
         context_length=context_length,
         api_base_url=api_base_url,
@@ -170,7 +170,7 @@ def analyze(
                 result.config.openai_api_key,
                 model=result.config.model,
                 context_length=result.config.context_length,
-                api_base_url=result.config.openai_api_base_url,
+                api_base_url=result.config.openai_base_url,
                 max_parallel=parallel,
             )
             report_gen = ReportGenerator(llm_client)

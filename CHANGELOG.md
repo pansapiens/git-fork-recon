@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Model validation against ALLOWED_MODELS environment variable
 - Cross-platform cache directories using platformdirs
 - uv sync instructions for modern dependency management
+- Interactive configuration setup wizard using rich for first-time configuration
+- TOML-based configuration file stored in platformdirs (replaces .env files)
+- Environment variable references in config file (e.g., `$OPENAI_BASE_URL`)
+- `--config` CLI option to specify custom config file location
 
 ### Changed
 - Refactored main.py to separate analysis logic from output generation
@@ -25,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated PyGithub to v2.8.1+ for rate limit API compatibility
 - Migrated from single CACHE_DIR to separate REPO_CACHE_DIR and REPORT_CACHE_DIR
 - Updated repository cache structure from dashes to {owner}/{repo} format
+- **BREAKING**: Migrated from `.env` file to TOML config file (`config.toml` in platformdirs)
+- **BREAKING**: Renamed `OPENAI_API_BASE_URL` to `OPENAI_BASE_URL` in config
+- **BREAKING**: Replaced `--env-file` CLI option with `--config` option
+- Renamed `cache_dir` to `cache_repo` and added `cache_report` in config structure
 
 ### Fixed
 - Fixed openrouter dependency version (was pinned to non-existant version).

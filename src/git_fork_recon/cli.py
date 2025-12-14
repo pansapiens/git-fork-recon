@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.logging import RichHandler
 
 from .main import analyze
+from .config import _get_config_path, setup_config_interactive, _save_config
 
 app = typer.Typer()
 console = Console()
@@ -97,10 +98,10 @@ def main(
         "--active-within",
         help="Only consider forks with activity within this time period (e.g. '1 hour', '2 days', '6 months', '1 year')",
     ),
-    env_file: Optional[Path] = typer.Option(
+    config: Optional[Path] = typer.Option(
         None,
-        "--env-file",
-        help="Path to .env file",
+        "--config",
+        help="Path to config.toml file",
     ),
     model: Optional[str] = typer.Option(
         None,
@@ -141,6 +142,19 @@ def main(
     ),
 ) -> None:
     """Analyze a GitHub repository's fork network and generate a summary report."""
+    # Check if config file exists, trigger setup if not (even when just showing help)
+    config_path = _get_config_path(config)
+    
+    if not config_path.exists():
+        # Set up logging for setup wizard
+        setup_logging(verbose)
+        logger.info("Config file not found. Starting interactive setup...")
+        config_dict = setup_config_interactive()
+        _save_config(config_dict, config_path)
+        from rich import print as rprint
+        rprint(f"\n[green]✓[/green] Configuration saved to: {config_path}")
+        rprint("")
+    
     # If no repo_url is provided, print help and exit.
     if repo_url is None:
         console.print(ctx.get_help())
@@ -175,7 +189,7 @@ def main(
             repo_url=repo_url,
             output=output,
             active_within=active_within,
-            env_file=env_file,
+            config_file=config,
             model=model,
             context_length=context_length,
             api_base_url=api_base_url,

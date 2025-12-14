@@ -72,11 +72,80 @@ uv sync --all-extras
 
 ## Configuration
 
-The following environment variables are required (can be provided via `.env` file):
+Configuration is stored in a TOML file located in the platform-specific config directory (e.g., `~/.config/git-fork-recon/config.toml` on Linux). On first run, an interactive setup wizard will guide you through configuration.
 
-- `GITHUB_TOKEN`: GitHub API token for (public read-only) repository metadata access
-- `OPENROUTER_API_KEY` or `OPENAI_API_KEY`: API key for an OpenAI-compatible LLM provider
-- `REPO_CACHE_DIR` (optional): Directory for caching cloned repositories (defaults to `~/.cache/git-fork-recon/repos` using platformdirs)
+### First-Time Setup
+
+When you run `git-fork-recon` for the first time, you'll be prompted for some configuration values.
+
+You will need:
+
+1) A Github API token to READ repositories and their forks. 
+  - Go to https://github.com/settings/tokens and make an access token with permissions: `public_repo`, `user:email` - provide the key when prompted.
+
+2) Access to an OpenAI-compatible endpoint. You can use:
+  - OpenRouter (paid but cheap, also some free endpoints if you create an API key: https://openrouter.ai/settings/keys), 
+  - Pollinations (a free LLM API - YMMV)
+  - a local server (Ollama, llama.cpp server, etc.)
+  - any remote OpenAI-compatible endpoint (e.g. OpenAI, Google, etc.)
+
+First-time configuration wizard options:
+
+- **OpenAI-Compatible Endpoint**: Choose from:
+  - Environment variable (`OPENAI_BASE_URL`)
+  - Local Ollama server (`http://localhost:11434`)
+  - Pollinations (free API)
+  - OpenRouter
+  - Custom URL
+- **Endpoint API Key**: Enter your API key or choose to always use an environment variable
+- **Model**: Select a model based on your chosen endpoint
+- **GitHub Token**: Enter your GitHub token or choose to always use an environment variable
+- **Cache Directories**: Configure repository and report cache locations (defaults to `$HOME/.cache/git-fork-recon/repos` and `$HOME/.cache/git-fork-recon/reports`)
+
+### Config File Structure
+
+The config file (`config.toml`) has the following structure:
+
+```toml
+# Configure an OpenAI-compatible endpoint
+[endpoint]
+base_url = "https://openrouter.ai/api/v1"
+api_key = "sk-..."
+model = "deepseek/deepseek-v3.2"
+# context_length = 64000  # Optional: Override default context length
+
+[github]
+# Get a token https://github.com/settings/tokens with permissions: public_repo, user:email
+token = "ghp_..."
+
+[cache]
+repo = "$HOME/.cache/git-fork-recon/repos"
+report = "$HOME/.cache/git-fork-recon/reports"
+
+[server]
+# Server configuration options (commented out by default)
+```
+
+### Environment Variable References
+
+You can use environment variable references in the config file by prefixing with `$`:
+
+```toml
+[endpoint]
+base_url = "$OPENAI_BASE_URL"  # Reads from OPENAI_BASE_URL env var
+api_key = "$OPENAI_API_KEY"    # Reads from OPENAI_API_KEY env var
+
+[github]
+token = "$GITHUB_TOKEN"        # Reads from GITHUB_TOKEN env var
+```
+
+### Custom Config File
+
+You can specify a custom config file location using the `--config` option:
+
+```bash
+git-fork-recon --config /path/to/config.toml https://github.com/user/repo
+```
 
 ## Server Configuration
 
@@ -225,7 +294,8 @@ $ git-fork-recon --help
 │                                        hour', '2 days', '6 months', '1       │
 │                                        year')                                │
 │                                        [default: None]                       │
-│ --env-file                    PATH     Path to .env file [default: None]     │
+│ --config                      PATH     Path to config.toml file [default:     │
+│                                        None]                                  │
 │ --model                       TEXT     OpenRouter model to use (overrides    │
 │                                        MODEL env var)                        │
 │                                        [default: None]                       │
@@ -273,7 +343,7 @@ mkdir -p "${HOME}/.cache/git-fork-recon"
 docker run --rm \
   -v "$(pwd):/app" \
   -v "${HOME}/.cache/git-fork-recon:/app/.cache" \
-  --env-file .env \
+  -v "${HOME}/.config/git-fork-recon:/app/.config/git-fork-recon" \
   --user "$(id -u):$(id -g)" \
   git-fork-recon \
   "https://github.com/martinpacesa/BindCraft"
