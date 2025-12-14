@@ -5,8 +5,8 @@ import logging
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
-import os
 
+from git_fork_recon.config import Config
 from .models import CacheMetadata, FormatEnum
 
 
@@ -16,16 +16,22 @@ logger = logging.getLogger(__name__)
 class CacheManager:
     """Manages cached analysis results with versioned storage."""
 
-    def __init__(self, cache_dir: Optional[Path] = None):
+    def __init__(self, cache_dir: Optional[Path] = None, config: Optional[Config] = None):
         """Initialize cache manager.
 
         Args:
-            cache_dir: Base directory for cache. If None, uses REPORT_CACHE_DIR env var
-                      or defaults to platformdirs user cache directory.
+            cache_dir: Base directory for cache. If None, uses config.server_cache_dir,
+                      config.cache_report, or defaults to platformdirs user cache directory.
+            config: Configuration object. If None, falls back to environment variables.
         """
         if cache_dir is None:
-            from platformdirs import user_cache_dir
-            cache_dir = Path(os.getenv("REPORT_CACHE_DIR") or user_cache_dir("git-fork-recon/reports"))
+            if config and config.server_cache_dir:
+                cache_dir = config.server_cache_dir
+            elif config:
+                cache_dir = config.cache_report
+            else:
+                from platformdirs import user_cache_dir
+                cache_dir = Path(user_cache_dir("git-fork-recon/reports"))
 
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -53,6 +59,7 @@ class CacheManager:
 
         if latest_link.exists() and latest_link.is_symlink():
             try:
+                import os
                 return os.readlink(latest_link)
             except OSError:
                 pass

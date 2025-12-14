@@ -75,3 +75,9 @@ class ConfigResponse(BaseModel):
 
     allowed_models: List[str] = Field(..., description="List of allowed LLM models")
     default_model: str = Field(..., description="Default LLM model")
+
+
+class ModelsResponse(BaseModel):
+    """Response model for available models."""
+
+    models: List[str] = Field(..., description="List of available model IDs")

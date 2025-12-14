@@ -2,8 +2,6 @@
 
 """CLI for the git-fork-recon server."""
 
-import os
-import sys
 import logging
 from pathlib import Path
 from typing import Optional
@@ -11,9 +9,9 @@ from typing import Optional
 import typer
 from rich.console import Console
 from rich.logging import RichHandler
-from dotenv import load_dotenv
 
 from .app import create_app
+from git_fork_recon.config import load_config
 
 app = typer.Typer()
 console = Console()
@@ -60,22 +58,19 @@ def main(
     ),
 ) -> None:
     """Start the git-fork-recon server."""
-    # Load .env file from current directory
-    env_path = Path.cwd() / ".env"
-    if env_path.exists():
-        logger.debug(f"Loading .env file from {env_path}")
-        load_dotenv(env_path, override=True)
-    else:
-        logger.debug("No .env file found in current directory")
-
     # Set up logging
     setup_logging(verbose)
 
-    # Set environment variables from command line overrides
-    if host != "127.0.0.1":
-        os.environ["SERVER_HOST"] = host
-    if port != 8000:
-        os.environ["SERVER_PORT"] = str(port)
+    # Load configuration
+    try:
+        config = load_config()
+    except Exception as e:
+        console.print(f"[red]Error loading configuration: {e}[/red]")
+        raise typer.Exit(1)
+
+    # Override host/port from command line if different from defaults
+    effective_host = host if host != "127.0.0.1" else config.server_host
+    effective_port = port if port != 8000 else config.server_port
 
     # Import uvicorn and start the server
     try:
@@ -87,28 +82,29 @@ def main(
 
     # Show startup information
     console.print(f"[green]Starting Git Fork Recon server[/green]")
-    console.print(f"Host: {host}")
-    console.print(f"Port: {port}")
+    console.print(f"Host: {effective_host}")
+    console.print(f"Port: {effective_port}")
     console.print(f"Reload: {'Yes' if reload else 'No'}")
     console.print(f"Log level: {log_level}")
 
-    if os.getenv("DISABLE_AUTH") == "1":
+    if config.server_disable_auth:
         console.print("[yellow]Authentication is disabled[/yellow]")
     else:
         console.print("Authentication is enabled")
 
-    if os.getenv("ALLOWED_MODELS"):
-        console.print(f"Allowed models: {os.getenv('ALLOWED_MODELS')}")
+    if config.server_allowed_models:
+        console.print(f"Allowed models: {', '.join(config.server_allowed_models)}")
 
-    console.print(f"Cache directory: {os.getenv('SERVER_CACHE_DIR', '.cache')}")
-    console.print(f"Max parallel tasks: {os.getenv('PARALLEL_TASKS', '2')}")
+    cache_dir = config.server_cache_dir or config.cache_report
+    console.print(f"Cache directory: {cache_dir}")
+    console.print(f"Max parallel tasks: {config.server_parallel_tasks}")
     console.print("")
 
     # Start the server
     uvicorn.run(
         "git_fork_recon_server.app:create_app",
-        host=host,
-        port=port,
+        host=effective_host,
+        port=effective_port,
         reload=reload,
         log_level=log_level,
         factory=True,

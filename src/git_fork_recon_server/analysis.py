@@ -4,11 +4,11 @@ import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Optional, Set
-import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 
 from git_fork_recon.main import analyze_forks
+from git_fork_recon.config import Config
 from .models import AnalysisStatus, AnalysisResponse, FormatEnum
 from .cache import CacheManager, CacheMetadata
 
@@ -29,15 +29,12 @@ def parse_github_url(url: str) -> tuple[str, str]:
 class AnalysisManager:
     """Manages background analysis tasks."""
 
-    def __init__(self, cache_manager: CacheManager):
+    def __init__(self, cache_manager: CacheManager, config: Config):
         """Initialize analysis manager."""
         self.cache_manager = cache_manager
         self.active_jobs: Dict[str, datetime] = {}
-        self.max_concurrent = int(os.getenv("PARALLEL_TASKS", "2"))
-        self.allowed_models = set(
-            model.strip() for model in os.getenv("ALLOWED_MODELS", "").split(",")
-            if model.strip()
-        )
+        self.max_concurrent = config.server_parallel_tasks
+        self.allowed_models = set(config.server_allowed_models) if config.server_allowed_models else set()
         self.executor = ThreadPoolExecutor(max_workers=self.max_concurrent)
         logger.info(f"Analysis manager initialized with {self.max_concurrent} concurrent tasks")
 

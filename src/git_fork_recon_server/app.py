@@ -1,19 +1,23 @@
 """FastAPI application for git-fork-recon server."""
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Optional
-import os
+from pathlib import Path
+
+import httpx
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .models import AnalysisRequest, AnalysisResponse, HealthResponse, ConfigResponse
+from .models import AnalysisRequest, AnalysisResponse, HealthResponse, ConfigResponse, ModelsResponse
 from .cache import CacheManager
 from .analysis import AnalysisManager
 from .auth import AuthMiddleware
+from git_fork_recon.config import load_config
 
 
 logger = logging.getLogger(__name__)
@@ -28,15 +32,22 @@ def _format_to_extension(format_value: str) -> str:
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
+    # Load configuration
+    try:
+        config = load_config()
+    except Exception as e:
+        logger.error(f"Failed to load configuration: {e}")
+        raise
+    
     app = FastAPI(
         title="Git Fork Recon Server",
         description="REST API for analyzing GitHub repository fork networks",
         version="0.1.0",
     )
 
-    # Initialize components
-    cache_manager = CacheManager()
-    analysis_manager = AnalysisManager(cache_manager)
+    # Initialize components with config
+    cache_manager = CacheManager(config=config)
+    analysis_manager = AnalysisManager(cache_manager, config=config)
 
     # Add CORS middleware
     app.add_middleware(
@@ -48,7 +59,7 @@ def create_app() -> FastAPI:
     )
 
     # Add authentication middleware
-    app.add_middleware(AuthMiddleware)
+    app.add_middleware(AuthMiddleware, config=config)
 
     @app.get("/health")
     async def health_check() -> HealthResponse:
@@ -59,7 +70,7 @@ def create_app() -> FastAPI:
             version="0.1.0",
             checks={
                 "cache": {"status": "ok", "path": str(cache_manager.cache_dir)},
-                "auth": {"disabled": os.getenv("DISABLE_AUTH", "0") == "1"},
+                "auth": {"disabled": config.server_disable_auth},
                 "concurrent_jobs": analysis_manager.get_job_count(),
                 "max_concurrent": analysis_manager.max_concurrent,
             },
@@ -77,7 +88,7 @@ def create_app() -> FastAPI:
             version="0.1.0",
             checks={
                 "cache": {"status": "ok", "path": str(cache_manager.cache_dir)},
-                "auth": {"disabled": os.getenv("DISABLE_AUTH", "0") == "1"},
+                "auth": {"disabled": config.server_disable_auth},
                 "concurrent_jobs": analysis_manager.get_job_count(),
                 "max_concurrent": analysis_manager.max_concurrent,
                 "can_accept_new_jobs": can_accept,
@@ -93,8 +104,42 @@ def create_app() -> FastAPI:
                 if analysis_manager.allowed_models
                 else []
             ),
-            default_model=os.getenv("MODEL", "deepseek/deepseek-chat-v3.1:free"),
+            default_model=config.model,
         )
+
+    @app.get("/models", response_model=ModelsResponse)
+    async def get_models() -> ModelsResponse:
+        """Get available models from the LLM API."""
+        try:
+            config = load_config()
+            base_url = config.openai_base_url
+            api_key = config.openai_api_key
+            
+            # Ensure base_url ends with a slash
+            if not base_url.endswith("/"):
+                base_url += "/"
+            
+            models_url = f"{base_url}models"
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "HTTP-Referer": "https://github.com/git-fork-recon",
+                "Content-Type": "application/json",
+            }
+            
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(models_url, headers=headers)
+                response.raise_for_status()
+                data = response.json()
+                
+                # Extract model IDs from the response
+                models = [model["id"] for model in data.get("data", [])]
+                return ModelsResponse(models=models)
+        except Exception as e:
+            logger.error(f"Error fetching models from API: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to fetch models from API: {str(e)}"
+            )
 
     @app.post("/analyze", response_model=AnalysisResponse)
     async def analyze_repository(
@@ -334,11 +379,19 @@ def create_app() -> FastAPI:
         return media_types.get(format, "text/plain")
 
     # Mount static files and add UI endpoint if not disabled
-    if os.getenv("DISABLE_UI", "0").lower() not in ("1", "true", "yes"):
+    if not config.server_disable_ui:
         # Mount static files
         static_dir = os.path.join(os.path.dirname(__file__), "static")
         if os.path.exists(static_dir):
             app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+        @app.get("/favicon.ico")
+        async def favicon():
+            """Serve the favicon."""
+            favicon_path = os.path.join(static_dir, "favicon.ico")
+            if os.path.exists(favicon_path):
+                return FileResponse(favicon_path)
+            raise HTTPException(status_code=404, detail="Favicon not found")
 
         @app.get("/ui")
         async def serve_ui():

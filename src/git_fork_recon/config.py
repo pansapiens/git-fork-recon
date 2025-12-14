@@ -48,6 +48,39 @@ class Config(BaseModel):
         default=None,
         description="Override model context length (if not set, uses API value)",
     )
+    # Server configuration
+    server_allowed_models: Optional[list[str]] = Field(
+        default=None,
+        description="List of allowed LLM models for server (None = unrestricted)",
+    )
+    server_parallel_tasks: int = Field(
+        default=2,
+        description="Maximum concurrent analysis tasks",
+    )
+    server_disable_auth: bool = Field(
+        default=True,
+        description="Disable authentication for server",
+    )
+    server_auth_bearer_token: Optional[str] = Field(
+        default=None,
+        description="Bearer token for server authentication",
+    )
+    server_cache_dir: Optional[Path] = Field(
+        default=None,
+        description="Server cache directory (None = use cache_report)",
+    )
+    server_disable_ui: bool = Field(
+        default=False,
+        description="Disable web UI",
+    )
+    server_host: str = Field(
+        default="127.0.0.1",
+        description="Server host",
+    )
+    server_port: int = Field(
+        default=8000,
+        description="Server port",
+    )
 
 
 def _is_pure_env_var_reference(value: str) -> bool:
@@ -338,18 +371,21 @@ report = {_escape_toml_string(cache_report)}
 # allowed_models = "deepseek/deepseek-chat-v3.1-terminus,z-ai/glm-4.5-air"
 
 # Server host and port configuration
-# host = "127.0.0.1"
-# port = 8000
+host = "127.0.0.1"
+port = 8000
 
 # Authentication settings
-# disable_auth = false
+disable_auth = true
 # auth_bearer_token = "your-secret-token-here"  # Or use: "$AUTH_BEARER_TOKEN"
 
 # Maximum concurrent analysis tasks (default: 2)
-# parallel_tasks = 2
+parallel_tasks = 2
+
+# Server cache directory (default: uses cache.report)
+# cache_dir = "$HOME/.cache/git-fork-recon/reports"
 
 # Web UI settings
-# disable_ui = false  # Set to true to disable the web UI at /ui endpoint
+disable_ui = false  # Set to true to disable the web UI at /ui endpoint
 """
     
     config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -379,6 +415,7 @@ def load_config(
     endpoint = toml_data.get("endpoint", {})
     github = toml_data.get("github", {})
     cache = toml_data.get("cache", {})
+    server = toml_data.get("server", {})
     
     # Resolve environment variable references
     openai_base_url = _resolve_env_var(endpoint.get("base_url", "https://openrouter.ai/api/v1"))
@@ -433,6 +470,32 @@ def load_config(
     model = endpoint.get("model", "deepseek/deepseek-chat-v3-0324:free")
     context_length = endpoint.get("context_length")
     
+    # Get server settings
+    allowed_models_str = server.get("allowed_models")
+    server_allowed_models = None
+    if allowed_models_str:
+        server_allowed_models = [m.strip() for m in str(allowed_models_str).split(",") if m.strip()]
+    
+    server_parallel_tasks = int(server.get("parallel_tasks", 2))
+    server_disable_auth = server.get("disable_auth", True)
+    if isinstance(server_disable_auth, str):
+        server_disable_auth = server_disable_auth.lower() in ("1", "true", "yes")
+    
+    server_auth_bearer_token = _resolve_env_var(server.get("auth_bearer_token", "")) or None
+    
+    server_cache_dir_str = server.get("cache_dir")
+    server_cache_dir = None
+    if server_cache_dir_str:
+        server_cache_dir_expanded = _expand_path(_resolve_env_var(str(server_cache_dir_str)))
+        server_cache_dir = Path(server_cache_dir_expanded)
+    
+    server_disable_ui = server.get("disable_ui", False)
+    if isinstance(server_disable_ui, str):
+        server_disable_ui = server_disable_ui.lower() in ("1", "true", "yes")
+    
+    server_host = server.get("host", "127.0.0.1")
+    server_port = int(server.get("port", 8000))
+    
     # Validate required fields
     if not github_token:
         logger.error("GITHUB_TOKEN is required in config or environment")
@@ -451,5 +514,13 @@ def load_config(
             "cache_report": cache_report,
             "model": model,
             "context_length": context_length,
+            "server_allowed_models": server_allowed_models,
+            "server_parallel_tasks": server_parallel_tasks,
+            "server_disable_auth": server_disable_auth,
+            "server_auth_bearer_token": server_auth_bearer_token,
+            "server_cache_dir": server_cache_dir,
+            "server_disable_ui": server_disable_ui,
+            "server_host": server_host,
+            "server_port": server_port,
         }
     )
