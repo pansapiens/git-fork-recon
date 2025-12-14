@@ -6,6 +6,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 import os
 import sys
+import shutil
 
 from .config import load_config
 from .github.api import GithubClient
@@ -71,10 +72,10 @@ def analyze_forks(
 
     # Clear cache only if requested
     if clear_cache and config.cache_repo:
-        repo_cache = config.cache_repo / repo_info.name
+        repo_cache = config.cache_repo / repo_info.owner / repo_info.name
         if repo_cache.exists():
             logger.info(f"Clearing cache for {repo_cache}")
-            repo_cache.unlink(missing_ok=True)
+            shutil.rmtree(repo_cache)
 
     # Clone main repository
     git_repo = GitRepo(repo_info, config)
