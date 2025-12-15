@@ -496,6 +496,52 @@ def load_config(
     server_host = server.get("host", "127.0.0.1")
     server_port = int(server.get("port", 8000))
     
+    # Override server settings from environment variables (env vars take precedence)
+    allowed_models_env = os.getenv("ALLOWED_MODELS")
+    if allowed_models_env:
+        allowed_models_env = allowed_models_env.strip()
+        if allowed_models_env:
+            server_allowed_models = [m.strip() for m in allowed_models_env.split(",") if m.strip()]
+        else:
+            server_allowed_models = None
+    
+    server_host_env = os.getenv("SERVER_HOST")
+    if server_host_env:
+        server_host = server_host_env
+    
+    server_port_env = os.getenv("SERVER_PORT")
+    if server_port_env:
+        try:
+            server_port = int(server_port_env)
+        except ValueError:
+            logger.warning(f"Invalid SERVER_PORT value: {server_port_env}, using default: {server_port}")
+    
+    report_cache_dir_env = os.getenv("REPORT_CACHE_DIR")
+    if report_cache_dir_env:
+        server_cache_dir_expanded = _expand_path(report_cache_dir_env)
+        server_cache_dir = Path(server_cache_dir_expanded)
+    
+    disable_auth_env = os.getenv("DISABLE_AUTH")
+    if disable_auth_env:
+        disable_auth_env = disable_auth_env.strip().lower()
+        server_disable_auth = disable_auth_env in ("1", "true", "yes")
+    
+    auth_bearer_token_env = os.getenv("AUTH_BEARER_TOKEN")
+    if auth_bearer_token_env:
+        server_auth_bearer_token = auth_bearer_token_env
+    
+    parallel_tasks_env = os.getenv("PARALLEL_TASKS")
+    if parallel_tasks_env:
+        try:
+            server_parallel_tasks = int(parallel_tasks_env)
+        except ValueError:
+            logger.warning(f"Invalid PARALLEL_TASKS value: {parallel_tasks_env}, using default: {server_parallel_tasks}")
+    
+    disable_ui_env = os.getenv("DISABLE_UI")
+    if disable_ui_env:
+        disable_ui_env = disable_ui_env.strip().lower()
+        server_disable_ui = disable_ui_env in ("1", "true", "yes")
+    
     # Validate required fields
     if not github_token:
         logger.error("GITHUB_TOKEN is required in config or environment")
