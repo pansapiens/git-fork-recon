@@ -14,10 +14,13 @@ from tenacity import (
     wait_exponential,
     retry_if_exception_type,
 )
+from rich.console import Console
+from rich.json import JSON
 
 from ..git.repo import CommitInfo
 
 logger = logging.getLogger(__name__)
+console = Console()
 
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 
@@ -42,6 +45,7 @@ class LLMClient:
         context_length: Optional[int] = None,
         api_base_url: str = DEFAULT_BASE_URL,
         max_parallel: int = 5,
+        verbose: bool = False,
     ):
         self.api_key = api_key
         self.model_name = model
@@ -60,6 +64,7 @@ class LLMClient:
             "gpt-4"
         )  # Reasonable default for most models
         self.max_parallel = max_parallel
+        self.verbose = verbose
         self._executor = ThreadPoolExecutor(max_workers=max_parallel)
         self._async_client = httpx.AsyncClient(timeout=600.0)
         # Initialize model info after all configuration is set
@@ -163,6 +168,9 @@ class LLMClient:
 
         # If within limits, proceed normally
         if total_tokens <= context_length - 1000:  # Reserve 1000 tokens for response
+            if self.verbose:
+                console.print("\n[bold cyan]LLM Request (messages):[/bold cyan]")
+                console.print(JSON.from_data(messages))
             return self._make_direct_request(messages)
 
         # If over limit, need to chunk and summarize
@@ -191,6 +199,9 @@ class LLMClient:
                 }
             )
 
+            if self.verbose:
+                console.print(f"\n[bold cyan]LLM Request (chunk {i+1}/{len(chunks)}):[/bold cyan]")
+                console.print(JSON.from_data(chunk_messages))
             try:
                 summary = self._make_direct_request(chunk_messages)
                 chunk_summaries.append(summary)
@@ -214,6 +225,9 @@ class LLMClient:
                 }
             )
 
+            if self.verbose:
+                console.print("\n[bold cyan]LLM Request (chunked final messages):[/bold cyan]")
+                console.print(JSON.from_data(final_messages))
             return self._make_request(final_messages, depth + 1)
         else:
             raise ValueError("Failed to process any chunks")
@@ -277,6 +291,9 @@ class LLMClient:
             },
         ]
 
+        if self.verbose:
+            console.print("\n[bold cyan]LLM Request (summarize_changes):[/bold cyan]")
+            console.print(JSON.from_data(messages))
         return self._make_request(messages)
 
     def generate_summary(self, prompt: str) -> str:
@@ -305,6 +322,9 @@ class LLMClient:
             {"role": "user", "content": prompt},
         ]
 
+        if self.verbose:
+            console.print("\n[bold cyan]LLM Request (generate_summary):[/bold cyan]")
+            console.print(JSON.from_data(messages))
         return self._make_request(messages)
 
     async def _async_make_direct_request(self, messages: List[dict]) -> str:
@@ -339,6 +359,9 @@ class LLMClient:
         total_tokens = sum(self._get_token_count(msg["content"]) for msg in messages)
 
         if total_tokens <= context_length - 1000:
+            if self.verbose:
+                console.print("\n[bold cyan]LLM Request (async messages):[/bold cyan]")
+                console.print(JSON.from_data(messages))
             return await self._async_make_direct_request(messages)
 
         logger.warning(
@@ -364,6 +387,9 @@ class LLMClient:
                     "content": f"This is part {i+1} of {len(chunks)} of the input. Please analyze this part:\n\n{chunk}",
                 }
             )
+            if self.verbose:
+                console.print(f"\n[bold cyan]LLM Request (async chunk {i+1}/{len(chunks)}):[/bold cyan]")
+                console.print(JSON.from_data(chunk_messages))
             chunk_tasks.append(self._async_make_direct_request(chunk_messages))
 
         # Use gather instead of TaskGroup for Python 3.9 compatibility
@@ -384,6 +410,9 @@ class LLMClient:
                 }
             )
 
+            if self.verbose:
+                console.print("\n[bold cyan]LLM Request (async chunked final messages):[/bold cyan]")
+                console.print(JSON.from_data(final_messages))
             return await self._async_make_request(final_messages, depth + 1)
         else:
             raise ValueError("Failed to process any chunks")
@@ -444,6 +473,9 @@ class LLMClient:
             },
         ]
 
+        if self.verbose:
+            console.print("\n[bold cyan]LLM Request (async_summarize_changes):[/bold cyan]")
+            console.print(JSON.from_data(messages))
         return await self._async_make_request(messages)
 
     async def async_generate_summary(self, prompt: str) -> str:
@@ -472,6 +504,9 @@ class LLMClient:
             {"role": "user", "content": prompt},
         ]
 
+        if self.verbose:
+            console.print("\n[bold cyan]LLM Request (async_generate_summary):[/bold cyan]")
+            console.print(JSON.from_data(messages))
         return await self._async_make_request(messages)
 
     # Synchronous wrappers for backward compatibility

@@ -42,6 +42,7 @@ def analyze_forks(
     activity_threshold: Optional[datetime] = None,
     max_forks: Optional[int] = None,
     github_token: Optional[str] = None,
+    verbose: bool = False,
 ) -> AnalysisResult:
     """Analyze forks of a GitHub repository and return results."""
     # Load config and apply overrides
@@ -65,6 +66,7 @@ def analyze_forks(
         context_length=config.context_length,
         api_base_url=config.openai_base_url,
         max_parallel=parallel,
+        verbose=verbose,
     )
 
     # Get repository and fork information
@@ -155,6 +157,7 @@ def analyze(
         clear_cache=clear_cache,
         activity_threshold=activity_threshold,
         max_forks=max_forks,
+        verbose=verbose,
     )
 
     # Write report to file or stdout
@@ -173,6 +176,7 @@ def analyze(
                 context_length=result.config.context_length,
                 api_base_url=result.config.openai_base_url,
                 max_parallel=parallel,
+                verbose=verbose,
             )
             report_gen = ReportGenerator(llm_client)
             report_gen.convert_report(output, output_formats.split(","))
