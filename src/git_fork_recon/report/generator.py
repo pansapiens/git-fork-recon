@@ -126,6 +126,7 @@ class ReportGenerator:
             analyses=fork_analyses,
             summary=interesting_forks_summary,
             generated_date=datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC"),
+            model_id=self.llm_client.model_name,
         )
 
     def convert_report(self, markdown_path: Path, formats: List[str]) -> None:

@@ -1,11 +1,16 @@
 # Fork Analysis Report for {{ repo.owner }}/{{ repo.name }}
 
 Repository: [{{ repo.owner }}/{{ repo.name }}](https://github.com/{{ repo.owner }}/{{ repo.name }})
+
 {% if repo.description %}
 Description: {{ repo.description }}
 {% endif %}
+
 Stars: {{ repo.stars }}
+
 Generated: {{ generated_date or 'Unknown' }}
+
+Model: {{ model_id or 'Unknown' }}
 
 ## Fork Analysis
 
