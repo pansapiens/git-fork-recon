@@ -22,26 +22,20 @@ Through the dark magic of large language models ✨, `git-fork-recon` helps find
 
 ## Features
 
-- Filters and prioritizes forks based on number of commits ahead of parent, starts, recent activity, PRs. Ignores forks with no changes.
-- Use locally hosted or remote LLMs with an OpenAI-compatible API.
-- Local caching of git repositories and forks (as remotes)
-- Detailed Markdown reports with:
+- **Filters and prioritizes forks** based on number of commits ahead of parent, starts, recent activity, PRs. Ignores forks with no changes.
+- Use **locally hosted** or **remote LLMs** with an OpenAI-compatible API.
+- **Local caching** of git repositories and forks (as remotes)
+- Detailed **Markdown reports** with:
   - Repository overview
   - Analysis of significant forks
   - Commit details and statistics
   - Links to GitHub commits and repositories
   - Overall summary of changes highlighting bugfixes, new features and innovations in the most interesting forks
-
-- **REST API server** for programmatic access with:
-  - Asynchronous analysis with background processing
-  - Versioned caching with filesystem storage
-  - Authentication support with Bearer tokens
-  - Configurable concurrency and rate limiting
-  - Simple web UI
+- **Local server** with a web UI and REST API
 
 # Quickstart
 
-The first time you run `git-fork-recon`, it will start the first-time configuration wizard (see [Configuration](#configuration) below). You'll need a **Github Access Token** and details of an **OpenAI-compatible endpoint**.
+The first time you run `git-fork-recon`, it will start the configuration wizard (see [Configuration](#configuration) below). You'll need a **Github Access Token** and details of an **OpenAI-compatible endpoint**.
 
 (using [uv](https://docs.astral.sh/uv/getting-started/installation/) for convenience)
 
@@ -73,7 +67,7 @@ uvx --from 'git-fork-recon[server]' git-fork-recon-server
 
 Go to http://localhost:8000/ui to see the web UI.
 
-# Installation (quick)
+## Installation (quick)
 
 ```bash
 uv tool install 'git-fork-recon[server]'
@@ -107,7 +101,7 @@ source .venv/bin/activate
 uv pip install -e '.[server,dev]'
 ```
 
-## Configuration
+# Configuration
 
 Configuration is stored in a TOML file located in the platform-specific config directory (e.g., `~/.config/git-fork-recon/config.toml` on Linux). On first run, an interactive setup wizard will guide you through configuration.
 
@@ -243,9 +237,11 @@ $ git-fork-recon --help
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
-## Server-mode configuration
+# Server-mode 
 
-For the REST API server, additional environment variables are available:
+## Server configuration
+
+For the REST API server, in addition `config.toml`, some configuration can be overriden using environment variabless:
 
 - `ALLOWED_MODELS`: Comma-separated list of allowed LLM models (default: unrestricted)
 - `SERVER_HOST`: Host to bind the server to (default: 127.0.0.1)
@@ -354,7 +350,7 @@ Response (while generating):
 
 Output is generated as `{username}-{repo}-forks.md` by default (use `-o` to specify a different file name, `-o -` to print to stdout).
 
-## See also
+# See also
 
 - [Useful forks](https://useful-forks.github.io/)
 - [frogmouth](https://github.com/Textualize/frogmouth) - a quick viewer for the generated Markdown
