@@ -70,6 +70,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/git_fork_recon", "src/git_fork_recon_server"]
+exclude = [
+    "examples/**",
+]
 
 [tool.ruff]
 line-length = 100

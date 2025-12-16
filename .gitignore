@@ -11,6 +11,5 @@ dist/
 .cursorignore
 .crush/
 
-examples/
 BUILD_PYPI.md
 TODO.md
