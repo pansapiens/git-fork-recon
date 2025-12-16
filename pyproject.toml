@@ -1,6 +1,6 @@
 [project]
 name = "git-fork-recon"
-version = "0.1.4"
+version = "0.1.5"
 description = "Analyse the network of forked git repositories"
 authors = [{ name = "Andrew Perry", email = "ajperry@pansapiens.com" }]
 license = "Apache-2.0"

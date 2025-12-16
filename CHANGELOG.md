@@ -9,12 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Google AI Studio endpoint support in configuration wizard with GEMINI_API_KEY environment variable support and default model `gemini-2.5-flash`
+- Don't fetch existing cached repos by default. `--force-fetch` flag to override.
 
 ### Removed
 - Pollinations endpoint support (removed due to reliability issues)
 
 ### Fixed
 - Server environment variable overrides now work correctly - environment variables (ALLOWED_MODELS, SERVER_HOST, SERVER_PORT, REPORT_CACHE_DIR, DISABLE_AUTH, AUTH_BEARER_TOKEN, PARALLEL_TASKS, DISABLE_UI) now properly override TOML config values as documented in README
+- Don't overwrite existing report, must use `--force` flag
 
 ## [0.1.4]
 
