@@ -151,19 +151,19 @@ def setup_config_interactive() -> Dict[str, Any]:
     
     options = []
     if openai_base_url_env:
-        options.append(("1", openai_base_url_env, f"Current OPENAI_BASE_URL ({openai_base_url_env})"))
+        options.append(("1", openai_base_url_env, f"Use {openai_base_url_env} (from your current $OPENAI_BASE_URL)"))
     options.extend([
-        ("2" if openai_base_url_env else "1", "$OPENAI_BASE_URL", "Always use $OPENAI_BASE_URL"),
+        ("2" if openai_base_url_env else "1", "$OPENAI_BASE_URL", "Read the $OPENAI_BASE_URL environment variable on launch"),
         ("3" if openai_base_url_env else "2", "http://localhost:11434/v1", "Local Ollama server (http://localhost:11434/v1)"),
-        ("4" if openai_base_url_env else "3", "https://text.pollinations.ai/openai", "Pollinations free API (https://text.pollinations.ai/openai)"),
-        ("5" if openai_base_url_env else "4", "https://openrouter.ai/api/v1", "OpenRouter (https://openrouter.ai/api/v1)"),
+        ("4" if openai_base_url_env else "3", "https://openrouter.ai/api/v1", "OpenRouter (https://openrouter.ai/api/v1)"),
+        ("5" if openai_base_url_env else "4", "https://generativelanguage.googleapis.com/v1beta/openai/", "Google AI Studio (https://generativelanguage.googleapis.com/v1beta/openai/)"),
         ("6" if openai_base_url_env else "5", None, "Enter custom URL"),
     ])
     
     for num, _, desc in options:
         rprint(f"  {num}. {desc}")
     
-    default_choice = "1" if openai_base_url_env else "4"
+    default_choice = "1" if openai_base_url_env else "3"
     choice = Prompt.ask("\nSelect endpoint", default=default_choice)
     
     # Find selected option
@@ -188,53 +188,80 @@ def setup_config_interactive() -> Dict[str, Any]:
     rprint("")
     openai_key_env = os.getenv("OPENAI_API_KEY")
     openrouter_key_env = os.getenv("OPENROUTER_API_KEY")
-    api_key_env = openai_key_env or openrouter_key_env
+    gemini_key_env = os.getenv("GEMINI_API_KEY")
     
     # Check if Ollama is selected
     is_ollama = "ollama" in selected_base_url.lower() or "localhost:11434" in selected_base_url
+    
+    # Check if Google AI Studio is selected
+    is_google_ai = "generativelanguage.googleapis.com" in selected_base_url.lower()
+    is_openrouter = "openrouter" in selected_base_url.lower()
     
     if is_ollama:
         # Ollama always uses 'ollama' as the default key
         config["api_key"] = "ollama"
         config["api_key_source"] = "manual"
         rprint("Using default Ollama API key: 'ollama'")
-    elif api_key_env:
-        redacted = _redact_secret(api_key_env)
-        env_var_name = "OPENROUTER_API_KEY" if (openrouter_key_env and "openrouter" in selected_base_url.lower()) else "OPENAI_API_KEY"
-        rprint(f"Found API key in environment: {redacted}")
-        use_env = Confirm.ask(f"Always use the ${env_var_name} environment variable?", default=True)
-        if use_env:
-            if openrouter_key_env and "openrouter" in selected_base_url.lower():
+    elif is_google_ai:
+        if gemini_key_env:
+            redacted = _redact_secret(gemini_key_env, show_chars=7)
+            rprint(f"Found API key in environment: {redacted}")
+            use_env = Confirm.ask("Always use the $GEMINI_API_KEY environment variable?", default=True)
+            if use_env:
+                config["api_key"] = "$GEMINI_API_KEY"
+                config["api_key_source"] = "GEMINI_API_KEY"
+            else:
+                config["api_key"] = Prompt.ask("Enter API key", password=True)
+                config["api_key_source"] = "manual"
+        else:
+            rprint("You can get an API key at: https://aistudio.google.com/api-keys")
+            config["api_key"] = Prompt.ask("Enter API key", password=True)
+            config["api_key_source"] = "manual"
+    elif is_openrouter:
+        if openrouter_key_env:
+            redacted = _redact_secret(openrouter_key_env, show_chars=7)
+            rprint(f"Found API key in environment: {redacted}")
+            use_env = Confirm.ask("Always use the $OPENROUTER_API_KEY environment variable?", default=True)
+            if use_env:
                 config["api_key"] = "$OPENROUTER_API_KEY"
                 config["api_key_source"] = "OPENROUTER_API_KEY"
             else:
-                config["api_key"] = "$OPENAI_API_KEY"
-                config["api_key_source"] = "OPENAI_API_KEY"
-        else:
-            if "openrouter" in selected_base_url.lower():
                 open_browser = Confirm.ask("Open browser to create OpenRouter API key?", default=False)
                 if open_browser:
                     webbrowser.open("https://openrouter.ai/settings/keys")
-            config["api_key"] = Prompt.ask("Enter API key", password=True)
-            config["api_key_source"] = "manual"
-    elif "pollinations" in selected_base_url.lower():
-        rprint("Pollinations detected - API key can be blank")
-        config["api_key"] = Prompt.ask("Enter API key (or leave blank)", default="")
-        config["api_key_source"] = "manual"
-    elif "openrouter" in selected_base_url.lower():
-        open_browser = Confirm.ask("Open browser to create OpenRouter API key?", default=False)
-        if open_browser:
-            webbrowser.open("https://openrouter.ai/settings/keys")
-        config["api_key"] = Prompt.ask("Enter API key", password=True)
-        config["api_key_source"] = "manual"
-    else:
-        use_env = Confirm.ask("Always use the $OPENAI_API_KEY environment variable?", default=False)
-        if use_env:
-            config["api_key"] = "$OPENAI_API_KEY"
-            config["api_key_source"] = "OPENAI_API_KEY"
+                config["api_key"] = Prompt.ask("Enter API key", password=True)
+                config["api_key_source"] = "manual"
         else:
-            config["api_key"] = Prompt.ask("Enter API key", password=True)
-            config["api_key_source"] = "manual"
+            rprint("You can get an API key at: https://openrouter.ai/settings/keys")
+            open_browser = Confirm.ask("Open browser to create OpenRouter API key?", default=False)
+            if open_browser:
+                webbrowser.open("https://openrouter.ai/settings/keys")
+            use_env = Confirm.ask("Always use the $OPENROUTER_API_KEY environment variable?", default=False)
+            if use_env:
+                config["api_key"] = "$OPENROUTER_API_KEY"
+                config["api_key_source"] = "OPENROUTER_API_KEY"
+            else:
+                config["api_key"] = Prompt.ask("Enter API key", password=True)
+                config["api_key_source"] = "manual"
+    else:
+        if openai_key_env:
+            redacted = _redact_secret(openai_key_env, show_chars=7)
+            rprint(f"Found API key in environment: {redacted}")
+            use_env = Confirm.ask("Always use the $OPENAI_API_KEY environment variable?", default=True)
+            if use_env:
+                config["api_key"] = "$OPENAI_API_KEY"
+                config["api_key_source"] = "OPENAI_API_KEY"
+            else:
+                config["api_key"] = Prompt.ask("Enter API key", password=True)
+                config["api_key_source"] = "manual"
+        else:
+            use_env = Confirm.ask("Always use the $OPENAI_API_KEY environment variable?", default=False)
+            if use_env:
+                config["api_key"] = "$OPENAI_API_KEY"
+                config["api_key_source"] = "OPENAI_API_KEY"
+            else:
+                config["api_key"] = Prompt.ask("Enter API key", password=True)
+                config["api_key_source"] = "manual"
     
     # MODEL
     rprint("")
@@ -264,8 +291,8 @@ def setup_config_interactive() -> Dict[str, Any]:
             config["model"] = "amazon/nova-2-lite-v1:free"
         else:
             config["model"] = Prompt.ask("Enter model name")
-    elif "pollinations" in selected_base_url.lower():
-        config["model"] = Prompt.ask("Enter model name", default="openai")
+    elif is_google_ai:
+        config["model"] = Prompt.ask("Enter model name", default="gemini-2.5-flash")
     elif "ollama" in selected_base_url.lower() or "localhost:11434" in selected_base_url:
         model_options = [
             "1. qwen3:4b",
@@ -433,6 +460,11 @@ def load_config(
         if os.getenv("OPENROUTER_API_KEY"):
             openai_api_key = os.getenv("OPENROUTER_API_KEY")
             api_key_source = "OPENROUTER_API_KEY"
+    elif "generativelanguage.googleapis.com" in openai_base_url:
+        # Try GEMINI_API_KEY if using Google AI Studio
+        if os.getenv("GEMINI_API_KEY"):
+            openai_api_key = os.getenv("GEMINI_API_KEY")
+            api_key_source = "GEMINI_API_KEY"
     elif not openai_api_key:
         # Fallback to environment variables
         if os.getenv("OPENAI_API_KEY"):
@@ -441,6 +473,9 @@ def load_config(
         elif os.getenv("OPENROUTER_API_KEY"):
             openai_api_key = os.getenv("OPENROUTER_API_KEY")
             api_key_source = "OPENROUTER_API_KEY"
+        elif os.getenv("GEMINI_API_KEY"):
+            openai_api_key = os.getenv("GEMINI_API_KEY")
+            api_key_source = "GEMINI_API_KEY"
     
     # Expand cache paths
     cache_repo_str = cache.get("repo", "$HOME/.cache/git-fork-recon/repos")
