@@ -225,6 +225,8 @@ $ git-fork-recon --help
 │ --verbose             -v               Enable verbose logging                │
 │ --clear-cache                          Clear cached repository data before   │
 │                                        analysis                              │
+│ --force-fetch                           Force fetch updates from cached     │
+│                                        repositories and remotes              │
 │ --force                                Force overwrite existing output file  │
 │ --max-forks                   INTEGER  Maximum number of forks to analyze    │
 │                                        (default: no limit)                   │

@@ -292,7 +292,7 @@ def setup_config_interactive() -> Dict[str, Any]:
         else:
             config["model"] = Prompt.ask("Enter model name")
     elif is_google_ai:
-        config["model"] = Prompt.ask("Enter model name", default="gemini-2.5-flash")
+        config["model"] = Prompt.ask("Enter model name", default="models/gemini-2.5-flash")
     elif "ollama" in selected_base_url.lower() or "localhost:11434" in selected_base_url:
         model_options = [
             "1. qwen3:4b",

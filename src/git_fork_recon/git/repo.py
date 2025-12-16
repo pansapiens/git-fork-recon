@@ -27,10 +27,11 @@ class CommitInfo:
 
 
 class GitRepo:
-    def __init__(self, repo_info: RepoInfo, config: Config):
+    def __init__(self, repo_info: RepoInfo, config: Config, force_fetch: bool = False):
         self.repo_info = repo_info
         self.cache_dir = config.cache_repo
         self.repo_dir = self.cache_dir / repo_info.owner / repo_info.name
+        self.force_fetch = force_fetch
         self._ensure_repo()
 
     def _ensure_repo(self) -> None:
@@ -42,10 +43,13 @@ class GitRepo:
         else:
             logger.info(f"Using existing clone at {self.repo_dir}")
             self.repo = Repo(self.repo_dir)
-            try:
-                self.repo.remotes.origin.fetch()
-            except GitCommandError as e:
-                logger.warning(f"Failed to fetch origin: {e}")
+            if self.force_fetch:
+                try:
+                    self.repo.remotes.origin.fetch()
+                except GitCommandError as e:
+                    logger.warning(f"Failed to fetch origin: {e}")
+            else:
+                logger.info("Cached repository found, skipping fetch")
 
     def add_fork(self, fork: ForkInfo) -> None:
         """Add a fork as a remote and fetch its contents."""
@@ -57,27 +61,47 @@ class GitRepo:
             logger.debug(
                 f"Remote {remote_name} already exists, checking if URL matches"
             )
+            logger.debug(f"Remote URL: {remote.url}, Fork URL: {fork.repo_info.clone_url}")
+
+            # Normalize URLs for comparison (strip trailing .git and trailing slashes)
+            def normalize_url(url: str) -> str:
+                url = url.rstrip("/")
+                if url.endswith(".git"):
+                    url = url[:-4]
+                return url
+
+            remote_url_normalized = normalize_url(str(remote.url))
+            fork_url_normalized = normalize_url(fork.repo_info.clone_url)
 
             # Check if the remote URL matches
-            if remote.url == fork.repo_info.clone_url:
-                logger.debug(f"Remote {remote_name} URL matches, using existing remote")
-                try:
-                    remote.fetch()
+            if remote_url_normalized == fork_url_normalized or remote.url == fork.repo_info.clone_url:
+                logger.info(
+                    f"Fork {fork.repo_info.owner}/{fork.repo_info.name} already cached as remote {remote_name}, skipping fetch"
+                )
+                if self.force_fetch:
+                    logger.info(f"Force fetching remote {remote_name}")
+                    try:
+                        remote.fetch()
+                        return
+                    except GitCommandError as e:
+                        logger.warning(
+                            f"Failed to fetch existing remote {remote_name}: {e}"
+                        )
+                else:
                     return
-                except GitCommandError as e:
-                    logger.warning(
-                        f"Failed to fetch existing remote {remote_name}: {e}"
-                    )
 
             # If URL doesn't match or fetch failed, remove the remote
-            logger.debug(f"Removing existing remote {remote_name} with mismatched URL")
+            logger.info(
+                f"Remote {remote_name} exists but URL doesn't match (remote: {remote.url}, fork: {fork.repo_info.clone_url}), removing and re-adding"
+            )
             remote.remove()
 
         except ValueError:
             # Remote doesn't exist, which is fine
+            logger.debug(f"Remote {remote_name} doesn't exist, will create new remote")
             pass
 
-        # Add new remote
+        # Add new remote (always fetch new remotes)
         logger.info(f"Adding new remote {remote_name} for {fork.repo_info.clone_url}")
         remote = self.repo.create_remote(remote_name, fork.repo_info.clone_url)
         try:

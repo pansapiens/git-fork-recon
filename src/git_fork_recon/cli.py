@@ -130,6 +130,12 @@ def main(
     clear_cache: bool = typer.Option(
         False, "--clear-cache", help="Clear cached repository data before analysis"
     ),
+    force_fetch: bool = typer.Option(
+        False, "--force-fetch", help="Force fetch updates from cached repositories and remotes"
+    ),
+    force: bool = typer.Option(
+        False, "--force", help="Force overwrite existing output file"
+    ),
     max_forks: Optional[int] = typer.Option(
         None,
         "--max-forks",
@@ -174,6 +180,15 @@ def main(
             output = Path(f"{owner}-{repo}-forks.md")
             logger.info(f"No output file specified, using default: {output}")
 
+        # Check if output file exists and --force is not set
+        if output is not None and str(output) != "-":
+            output_path = output if isinstance(output, Path) else Path(output)
+            if output_path.exists() and not force:
+                logger.error(
+                    f"Output file {output_path} already exists. Use --force to overwrite."
+                )
+                sys.exit(1)
+
         # Parse active_within if provided
         activity_threshold = None
         if active_within:
@@ -200,6 +215,8 @@ def main(
             max_forks=max_forks,
             output_formats=output_formats,
             activity_threshold=activity_threshold,
+            force_fetch=force_fetch,
+            force=force,
         )
 
     except Exception as e:

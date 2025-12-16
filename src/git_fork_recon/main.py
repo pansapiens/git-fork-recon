@@ -43,6 +43,7 @@ def analyze_forks(
     max_forks: Optional[int] = None,
     github_token: Optional[str] = None,
     verbose: bool = False,
+    force_fetch: bool = False,
 ) -> AnalysisResult:
     """Analyze forks of a GitHub repository and return results."""
     # Load config and apply overrides
@@ -80,7 +81,7 @@ def analyze_forks(
             shutil.rmtree(repo_cache)
 
     # Clone main repository
-    git_repo = GitRepo(repo_info, config)
+    git_repo = GitRepo(repo_info, config, force_fetch=force_fetch)
 
     # Get and filter forks
     forks = github_client.get_forks(repo_info, max_forks=max_forks)
@@ -121,6 +122,8 @@ def analyze(
     clear_cache: bool = False,
     activity_threshold: Optional[datetime] = None,
     max_forks: Optional[int] = None,
+    force_fetch: bool = False,
+    force: bool = False,
 ) -> None:
     """Analyze forks of a GitHub repository (CLI interface)."""
     # Load config and apply overrides
@@ -158,14 +161,21 @@ def analyze(
         activity_threshold=activity_threshold,
         max_forks=max_forks,
         verbose=verbose,
+        force_fetch=force_fetch,
     )
 
     # Write report to file or stdout
     if output is None or str(output) == "-":
         sys.stdout.write(result.report)
     else:
-        output.write_text(result.report)
-        logger.info(f"Report written to {output}")
+        output_path = Path(output)
+        if output_path.exists() and not force:
+            logger.error(
+                f"Output file {output_path} already exists. Use --force to overwrite."
+            )
+            sys.exit(1)
+        output_path.write_text(result.report)
+        logger.info(f"Report written to {output_path}")
 
         # Handle additional output formats if specified
         if output_formats:
