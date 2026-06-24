@@ -279,7 +279,8 @@ class LLMClient:
                 - "whitespace" - only whitespace changes, no significant code changes
                 
                 If no forks with notable changes are provided, say so, don't make stuff up. 
-                Be objective and technical, but make the summary accessible to developers.""",
+                Be objective and technical, but make the summary accessible to developers.
+                Please translate all non-English languages to English.""",
             },
             {
                 "role": "user",
@@ -317,7 +318,8 @@ class LLMClient:
                 Be objective and technical, but make the summary accessible to developers.
                 Avoid detailed descriptions of installation-focused forks unless they introduce significant architectural changes.
                 
-                Write one or two paragraphs in Markdown, including hyperlinks, discussing your findings.""",
+                Write one or two paragraphs in Markdown, including hyperlinks, discussing your findings.
+                Please translate all non-English languages to English.""",
             },
             {"role": "user", "content": prompt},
         ]
@@ -461,7 +463,8 @@ class LLMClient:
                 - "ci" - adds or improves CI/CD
                 - "whitespace" - only whitespace changes, no significant code changes
                 
-                Be objective and technical, but make the summary accessible to developers.""",
+                Be objective and technical, but make the summary accessible to developers.
+                Please translate all non-English languages to English.""",
             },
             {
                 "role": "user",
@@ -499,7 +502,8 @@ class LLMClient:
                 Be objective and technical, but make the summary accessible to developers.
                 Avoid detailed descriptions of installation-focused forks unless they introduce significant architectural changes.
                 
-                Write one or two paragraphs in Markdown, including hyperlinks, discussing your findings.""",
+                Write one or two paragraphs in Markdown, including hyperlinks, discussing your findings.
+                Please translate all non-English languages to English.""",
             },
             {"role": "user", "content": prompt},
         ]
