@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Include model name in report templates
 
+### Fixed
+- Report generation no longer crashes when an LLM returns null summary content
+
 ## [0.1.5]
 
 ### Added

@@ -144,7 +144,9 @@ class LLMClient:
                 timeout=600.0,
             )
             response.raise_for_status()
-            return response.json()["choices"][0]["message"]["content"]
+            content = response.json()["choices"][0]["message"].get("content")
+            # Some models (eg reasoning models) may return null content
+            return content if content is not None else ""
         except Exception as e:
             logger.error(f"Error making LLM request: {e}")
             raise
@@ -342,7 +344,9 @@ class LLMClient:
                 self.chat_completions_url, headers=self.headers, json=data
             )
             response.raise_for_status()
-            return response.json()["choices"][0]["message"]["content"]
+            content = response.json()["choices"][0]["message"].get("content")
+            # Some models (eg reasoning models) may return null content
+            return content if content is not None else ""
         except Exception as e:
             logger.error(f"Error making async LLM request: {e}")
             raise

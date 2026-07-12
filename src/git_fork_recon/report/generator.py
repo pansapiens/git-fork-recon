@@ -16,8 +16,11 @@ from .pandoc import PandocConverter
 logger = logging.getLogger(__name__)
 
 
-def _linkify_commit_hashes(text: str, repo_url: str) -> str:
+def _linkify_commit_hashes(text: Optional[str], repo_url: str) -> str:
     """Convert commit hashes in text to markdown links."""
+    if not text:
+        return ""
+
     # Match 7-40 character hex strings that look like commit hashes
     pattern = r"\b([a-f0-9]{7,40})\b"
 
@@ -53,6 +56,8 @@ class ReportGenerator:
                 diff = git_repo.get_file_diff(fork, commits[0].files_changed[0])
 
             summary = await self.llm_client.async_summarize_changes(commits, diff)
+            if not summary:
+                summary = "(No summary generated)"
 
             return {"fork": fork, "commits": commits, "summary": summary}
 
