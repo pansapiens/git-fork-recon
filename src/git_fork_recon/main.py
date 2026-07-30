@@ -41,6 +41,7 @@ def analyze_forks(
     clear_cache: bool = False,
     activity_threshold: Optional[datetime] = None,
     max_forks: Optional[int] = None,
+    max_branches_per_fork: Optional[int] = 3,
     github_token: Optional[str] = None,
     verbose: bool = False,
     force_fetch: bool = False,
@@ -84,7 +85,9 @@ def analyze_forks(
     git_repo = GitRepo(repo_info, config, force_fetch=force_fetch)
 
     # Get and filter forks
-    forks = github_client.get_forks(repo_info, max_forks=max_forks)
+    forks = github_client.get_forks(
+        repo_info, max_forks=max_forks, max_branches_per_fork=max_branches_per_fork
+    )
 
     # Apply activity threshold if specified
     if activity_threshold:
@@ -122,6 +125,7 @@ def analyze(
     clear_cache: bool = False,
     activity_threshold: Optional[datetime] = None,
     max_forks: Optional[int] = None,
+    max_branches_per_fork: Optional[int] = 3,
     force_fetch: bool = False,
     force: bool = False,
 ) -> None:
@@ -160,6 +164,7 @@ def analyze(
         clear_cache=clear_cache,
         activity_threshold=activity_threshold,
         max_forks=max_forks,
+        max_branches_per_fork=max_branches_per_fork,
         verbose=verbose,
         force_fetch=force_fetch,
     )

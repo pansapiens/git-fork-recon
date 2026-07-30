@@ -37,6 +37,9 @@ class ForkInfo:
     has_pull_requests: bool
     pull_request_urls: List[str]
     last_updated: str
+    # Branch this comparison was made against - may differ from repo_info.default_branch,
+    # since forks often carry their changes on non-default branches
+    branch: str
 
 
 class GithubClient:
@@ -76,90 +79,134 @@ class GithubClient:
             return 100
 
     async def _process_fork(
-        self, repo: Repository, fork: Repository
-    ) -> Optional[ForkInfo]:
-        """Process a single fork asynchronously."""
+        self,
+        repo: Repository,
+        fork: Repository,
+        parent_branch,
+        max_branches_per_fork: Optional[int] = 3,
+    ) -> List[ForkInfo]:
+        """Process a single fork asynchronously.
+
+        Compares every branch on the fork (not just its default branch) against
+        the parent's default branch, since forks often carry their changes on
+        non-default/feature branches. Returns one ForkInfo per branch that is
+        ahead, capped to the most-diverged `max_branches_per_fork` branches.
+        """
         try:
             logger.debug(f"Processing fork: {fork.full_name}")
-            logger.debug(f"Fork default branch: {fork.default_branch}")
-            logger.debug(f"Parent default branch: {repo.default_branch}")
 
             try:
-                fork_branch = fork.get_branch(fork.default_branch)
-                logger.debug(f"Fork branch SHA: {fork_branch.commit.sha}")
-
-                parent_branch = repo.get_branch(repo.default_branch)
-                logger.debug(f"Parent branch SHA: {parent_branch.commit.sha}")
-
-                comparison = repo.compare(
-                    parent_branch.commit.sha, fork_branch.commit.sha
-                )
-                logger.debug(
-                    f"Comparison successful: ahead={comparison.ahead_by}, behind={comparison.behind_by}"
-                )
-
-            except UnknownObjectException as e:
-                logger.warning(
-                    f"Fork {fork.full_name} branch comparison failed - repository or branch may be deleted/private: {e}"
-                )
-                return None
+                fork_branches = list(fork.get_branches())
             except Exception as e:
-                logger.warning(f"Failed to compare branches for {fork.full_name}: {e}")
-                return None
+                logger.warning(f"Failed to list branches for {fork.full_name}: {e}")
+                return []
 
-            pr_spec = f"{fork.owner.login}:{fork.default_branch}"
-            logger.debug(f"Checking PRs with head: {pr_spec}")
-            prs = repo.get_pulls(state="all", head=pr_spec)
-            pr_urls = [pr.html_url for pr in prs]
+            branch_comparisons = []
+            for branch in fork_branches:
+                try:
+                    comparison = repo.compare(
+                        parent_branch.commit.sha, branch.commit.sha
+                    )
+                except UnknownObjectException as e:
+                    logger.warning(
+                        f"Comparison failed for {fork.full_name}:{branch.name} - "
+                        f"branch may be deleted/private: {e}"
+                    )
+                    continue
+                except GithubException as e:
+                    # Commonly a 404 "No common ancestor" for orphan/disconnected branches
+                    logger.debug(
+                        f"Skipping {fork.full_name}:{branch.name} - not comparable: {e}"
+                    )
+                    continue
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to compare {fork.full_name}:{branch.name}: {e}"
+                    )
+                    continue
 
-            fork_info = ForkInfo(
-                repo_info=RepoInfo(
-                    owner=fork.owner.login,
-                    name=fork.name,
-                    clone_url=fork.clone_url,
-                    default_branch=fork.default_branch,
-                    stars=fork.stargazers_count,
-                    description=fork.description,
-                ),
-                parent_repo=RepoInfo(
-                    owner=repo.owner.login,
-                    name=repo.name,
-                    clone_url=repo.clone_url,
-                    default_branch=repo.default_branch,
-                    stars=repo.stargazers_count,
-                    description=repo.description,
-                ),
-                ahead_commits=comparison.ahead_by,
-                behind_commits=comparison.behind_by,
-                has_pull_requests=prs.totalCount > 0,
-                pull_request_urls=pr_urls,
-                last_updated=fork.pushed_at.isoformat(),
-            )
+                if comparison.ahead_by > 0:
+                    branch_comparisons.append((branch.name, comparison))
 
-            if fork_info.ahead_commits > 0:
+            if not branch_comparisons:
+                logger.debug(f"Skipping fork {fork.full_name} with no changes on any branch")
+                return []
+
+            branch_comparisons.sort(key=lambda b: b[1].ahead_by, reverse=True)
+            if max_branches_per_fork and len(branch_comparisons) > max_branches_per_fork:
+                dropped = [name for name, _ in branch_comparisons[max_branches_per_fork:]]
                 logger.info(
-                    f"Adding fork {fork.full_name} with {fork_info.ahead_commits} commits ahead"
+                    f"{fork.full_name}: {len(branch_comparisons)} branches ahead, "
+                    f"keeping top {max_branches_per_fork} by commits ahead "
+                    f"(dropped: {', '.join(dropped)})"
                 )
-                return fork_info
-            else:
-                logger.debug(f"Skipping fork {fork.full_name} with no changes")
-                return None
+                branch_comparisons = branch_comparisons[:max_branches_per_fork]
+
+            fork_infos = []
+            for branch_name, comparison in branch_comparisons:
+                pr_spec = f"{fork.owner.login}:{branch_name}"
+                try:
+                    prs = repo.get_pulls(state="all", head=pr_spec)
+                    pr_urls = [pr.html_url for pr in prs]
+                    has_prs = prs.totalCount > 0
+                except Exception as e:
+                    logger.warning(f"Failed to check PRs for {pr_spec}: {e}")
+                    pr_urls, has_prs = [], False
+
+                fork_infos.append(
+                    ForkInfo(
+                        repo_info=RepoInfo(
+                            owner=fork.owner.login,
+                            name=fork.name,
+                            clone_url=fork.clone_url,
+                            default_branch=fork.default_branch,
+                            stars=fork.stargazers_count,
+                            description=fork.description,
+                        ),
+                        parent_repo=RepoInfo(
+                            owner=repo.owner.login,
+                            name=repo.name,
+                            clone_url=repo.clone_url,
+                            default_branch=repo.default_branch,
+                            stars=repo.stargazers_count,
+                            description=repo.description,
+                        ),
+                        ahead_commits=comparison.ahead_by,
+                        behind_commits=comparison.behind_by,
+                        has_pull_requests=has_prs,
+                        pull_request_urls=pr_urls,
+                        last_updated=fork.pushed_at.isoformat(),
+                        branch=branch_name,
+                    )
+                )
+                logger.info(
+                    f"Adding fork {fork.full_name}:{branch_name} with {comparison.ahead_by} commits ahead"
+                )
+
+            return fork_infos
 
         except Exception as e:
             logger.warning(
                 f"Error processing fork {fork.full_name}: {e}", exc_info=True
             )
-            return None
+            return []
 
     async def _process_fork_batch(
-        self, repo: Repository, forks: List[Repository]
+        self,
+        repo: Repository,
+        forks: List[Repository],
+        parent_branch,
+        max_branches_per_fork: Optional[int] = 3,
     ) -> List[ForkInfo]:
         """Process a batch of forks in parallel."""
         # Check rate limit before processing batch
         remaining = self._check_rate_limit()
 
-        # Estimate requests needed (4 API calls per fork)
-        requests_needed = len(forks) * 4
+        # Estimate requests needed: 1 to list branches, plus 1 compare + 1 PR
+        # check per branch kept. Actual comparisons made may exceed this if a
+        # fork has many branches - this is a rough guide, not a hard cap.
+        branches_per_fork_estimate = max_branches_per_fork or 3
+        requests_needed = len(forks) * (1 + branches_per_fork_estimate * 2)
         if remaining < requests_needed:
             logger.warning(
                 f"Rate limit may be exceeded: need ~{requests_needed} requests but only {remaining} remaining. "
@@ -168,21 +215,31 @@ class GithubClient:
 
         tasks = []
         for fork in forks:
-            tasks.append(self._process_fork(repo, fork))
+            tasks.append(
+                self._process_fork(repo, fork, parent_branch, max_branches_per_fork)
+            )
 
         results = await asyncio.gather(*tasks)
-        return [r for r in results if r is not None]
+        return [fork_info for result in results for fork_info in result]
 
     async def async_get_forks(
-        self, repo_info: RepoInfo, max_forks: Optional[int] = None
+        self,
+        repo_info: RepoInfo,
+        max_forks: Optional[int] = None,
+        max_branches_per_fork: Optional[int] = 3,
     ) -> List[ForkInfo]:
         """Get information about all forks of a repository asynchronously.
 
         Args:
             repo_info: Repository information
             max_forks: Maximum number of forks to process after sorting by update time
+            max_branches_per_fork: Maximum number of diverged branches to keep per
+                fork (by commits ahead). Forks often carry changes on non-default
+                branches, so every branch is compared, but only the most-diverged
+                ones are kept to bound API usage and report size. None = no cap.
         """
         repo = self.client.get_repo(f"{repo_info.owner}/{repo_info.name}")
+        parent_branch = repo.get_branch(repo.default_branch)
         forks = list(repo.get_forks())
         logger.info(
             f"Found {len(forks)} total forks for {repo_info.owner}/{repo_info.name}"
@@ -202,8 +259,10 @@ class GithubClient:
             logger.debug(f"Processing all {len(forks)} forks (no limit specified)")
 
         # Check if we have enough rate limit for all forks
+        branches_per_fork_estimate = max_branches_per_fork or 3
+        requests_per_fork_estimate = 1 + branches_per_fork_estimate * 2
         remaining = self._check_rate_limit()
-        total_requests_needed = len(forks) * 4  # Approximate requests per fork
+        total_requests_needed = len(forks) * requests_per_fork_estimate
         if remaining < total_requests_needed:
             logger.warning(
                 f"Not enough rate limit for all forks. Need ~{total_requests_needed} requests but only have {remaining}. "
@@ -213,18 +272,20 @@ class GithubClient:
         # Process forks in batches
         processed_forks = []
         for i in range(0, len(forks), self.max_parallel):
-            if self._check_rate_limit() < self.max_parallel * 4:
+            if self._check_rate_limit() < self.max_parallel * requests_per_fork_estimate:
                 logger.error(
                     "Rate limit too low to process next batch. Stopping early."
                 )
                 break
 
             batch = forks[i : i + self.max_parallel]
-            batch_results = await self._process_fork_batch(repo, batch)
+            batch_results = await self._process_fork_batch(
+                repo, batch, parent_branch, max_branches_per_fork
+            )
             processed_forks.extend(batch_results)
 
         logger.info(
-            f"Found {len(processed_forks)} active forks with changes out of {len(forks)} processed forks"
+            f"Found {len(processed_forks)} active fork branches with changes out of {len(forks)} processed forks"
         )
         # Final sort by significance (ahead commits and stars)
         processed_forks.sort(
@@ -233,10 +294,15 @@ class GithubClient:
         return processed_forks
 
     def get_forks(
-        self, repo_info: RepoInfo, max_forks: Optional[int] = None
+        self,
+        repo_info: RepoInfo,
+        max_forks: Optional[int] = None,
+        max_branches_per_fork: Optional[int] = 3,
     ) -> List[ForkInfo]:
         """Synchronous wrapper for async_get_forks."""
-        return asyncio.run(self.async_get_forks(repo_info, max_forks))
+        return asyncio.run(
+            self.async_get_forks(repo_info, max_forks, max_branches_per_fork)
+        )
 
     def get_repository(self, repo_identifier: str) -> RepoInfo:
         """Get information about a GitHub repository.

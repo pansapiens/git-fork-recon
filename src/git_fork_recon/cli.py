@@ -141,6 +141,12 @@ def main(
         "--max-forks",
         help="Maximum number of forks to analyze (default: no limit)",
     ),
+    max_branches_per_fork: Optional[int] = typer.Option(
+        3,
+        "--max-branches-per-fork",
+        help="Maximum diverged branches to keep per fork, by commits ahead "
+        "(every branch is still compared; set to 0 to disable the cap)",
+    ),
     output_formats: Optional[str] = typer.Option(
         None,
         "--output-formats",
@@ -213,6 +219,7 @@ def main(
             verbose=verbose,
             clear_cache=clear_cache,
             max_forks=max_forks,
+            max_branches_per_fork=max_branches_per_fork or None,
             output_formats=output_formats,
             activity_threshold=activity_threshold,
             force_fetch=force_fetch,

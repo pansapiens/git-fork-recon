@@ -14,10 +14,10 @@ Model: {{ model_id or 'Unknown' }}
 
 ## Fork Analysis
 
-Found {{ analyses|length }} active forks with significant changes.
+Found {{ analyses|length }} active fork branches with significant changes{% if unique_fork_count %} across {{ unique_fork_count }} forks{% endif %}.
 
 {% for analysis in analyses %}
-### [{{ analysis.fork.repo_info.owner }}/{{ analysis.fork.repo_info.name }}](https://github.com/{{ analysis.fork.repo_info.owner }}/{{ analysis.fork.repo_info.name }})
+### [{{ analysis.fork.repo_info.owner }}/{{ analysis.fork.repo_info.name }}](https://github.com/{{ analysis.fork.repo_info.owner }}/{{ analysis.fork.repo_info.name }}/tree/{{ analysis.fork.branch }}){% if analysis.fork.branch != analysis.fork.repo_info.default_branch %} — branch `{{ analysis.fork.branch }}`{% endif %}
 
 **Stats:**
 - Commits ahead: {{ analysis.fork.ahead_commits }}

@@ -6,6 +6,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, Optional, Set
 import re
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 
 from git_fork_recon.main import analyze_forks
 from git_fork_recon.config import Config
@@ -155,22 +156,26 @@ class AnalysisManager:
             # Parse repository URL
             owner, repo_name = parse_github_url(repo_url)
 
-            # Perform analysis in a thread pool to avoid blocking the event loop
+            # Perform analysis in a thread pool to avoid blocking the event loop.
+            # Bound via keyword args (not positional) so future analyze_forks
+            # signature changes can't silently shift arguments like github_token.
             loop = asyncio.get_running_loop()
             result = await loop.run_in_executor(
                 self.executor,
-                analyze_forks,
-                str(repo_url),
-                None,  # env_file
-                model,
-                None,  # context_length
-                None,  # api_base_url
-                None,  # api_key_env_var
-                5,  # parallel
-                False,  # clear_cache
-                None,  # activity_threshold
-                None,  # max_forks
-                github_token,
+                partial(
+                    analyze_forks,
+                    str(repo_url),
+                    config_file=None,
+                    model=model,
+                    context_length=None,
+                    api_base_url=None,
+                    api_key_env_var=None,
+                    parallel=5,
+                    clear_cache=False,
+                    activity_threshold=None,
+                    max_forks=None,
+                    github_token=github_token,
+                ),
             )
 
             # Save to cache

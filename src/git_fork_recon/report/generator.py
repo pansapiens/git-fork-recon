@@ -85,7 +85,7 @@ class ReportGenerator:
         for analysis in analyses:
             fork = analysis["fork"]
             fork_summaries.append(
-                f"Fork: {fork.repo_info.owner}/{fork.repo_info.name}\n"
+                f"Fork: {fork.repo_info.owner}/{fork.repo_info.name} (branch: {fork.branch})\n"
                 f"Stars: {fork.repo_info.stars}\n"
                 f"Changes: {analysis['summary']}\n"
             )
@@ -125,6 +125,10 @@ class ReportGenerator:
                 fork_analyses
             )
 
+        unique_fork_count = len(
+            {(a["fork"].repo_info.owner, a["fork"].repo_info.name) for a in fork_analyses}
+        )
+
         # Render template
         return template.render(
             repo=repo_info,
@@ -132,6 +136,7 @@ class ReportGenerator:
             summary=interesting_forks_summary,
             generated_date=datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC"),
             model_id=self.llm_client.model_name,
+            unique_fork_count=unique_fork_count,
         )
 
     def convert_report(self, markdown_path: Path, formats: List[str]) -> None:

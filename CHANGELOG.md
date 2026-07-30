@@ -7,11 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6]
+
 ### Added
 - Include model name in report templates
+- GitHub Actions workflow to publish to PyPI on `v*` version tags
+- `--max-branches-per-fork` option to control how many diverged non-default branches are kept per fork (default 3, `0` disables the cap)
 
 ### Fixed
 - Report generation no longer crashes when an LLM returns null summary content
+- Forks that carry their changes on non-default branches (rather than the fork's own default branch) are no longer silently omitted from reports - every branch is now compared against upstream, not just the default branch
 
 ## [0.1.5]
 

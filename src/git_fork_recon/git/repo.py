@@ -122,7 +122,7 @@ class GitRepo:
 
         # Get commits that are in the fork but not in parent
         parent_ref = f"origin/{self.repo_info.default_branch}"
-        fork_ref = f"{remote_name}/{fork.repo_info.default_branch}"
+        fork_ref = f"{remote_name}/{fork.branch}"
 
         commits = []
         for commit in self.repo.iter_commits(f"{parent_ref}..{fork_ref}"):
@@ -147,7 +147,7 @@ class GitRepo:
         """Get the diff for a specific file between parent and fork."""
         remote_name = f"fork-{fork.repo_info.owner}"
         parent_ref = f"origin/{self.repo_info.default_branch}"
-        fork_ref = f"{remote_name}/{fork.repo_info.default_branch}"
+        fork_ref = f"{remote_name}/{fork.branch}"
 
         diff = self.repo.git.diff(parent_ref, fork_ref, "--", file_path)
         return diff
